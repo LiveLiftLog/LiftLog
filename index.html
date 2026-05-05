@@ -1,0 +1,2599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Lift Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --bg: #0a0a0a;
+    --surface: #161616;
+    --surface-2: #1f1f1f;
+    --border: #2a2a2a;
+    --text: #f5f5f5;
+    --text-dim: #888;
+    --text-faint: #555;
+    --accent: #ff5722;
+    --accent-dim: #4a1a08;
+    --success: #4ade80;
+  }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    overscroll-behavior: none;
+  }
+
+  body {
+    padding-bottom: 100px;
+  }
+
+  .header {
+    padding: 24px 20px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 4px;
+  }
+
+  .logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 32px;
+    letter-spacing: 0.05em;
+    line-height: 1;
+  }
+
+  .logo .accent { color: var(--accent); }
+
+  .date {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .save-indicator {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin-top: 4px;
+  }
+
+  .save-indicator.saved { color: var(--success); }
+
+  /* Top tabs (INFO / DATA / REMINDERS / DAY) */
+  .top-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    position: sticky;
+    top: 87px;
+    z-index: 99;
+  }
+
+  .top-tab {
+    flex: 1;
+    padding: 14px 8px;
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.15s;
+    white-space: nowrap;
+    text-align: center;
+  }
+
+  .top-tab.active {
+    color: var(--text);
+    border-bottom-color: var(--accent);
+  }
+
+  .top-tab.day-tab {
+    color: var(--accent);
+    font-size: 12px;
+    letter-spacing: 0.05em;
+  }
+
+  .top-tab.day-tab.active {
+    color: var(--accent);
+  }
+
+  /* Day dropdown selector inside the day view */
+  .day-selector {
+    margin-bottom: 16px;
+  }
+
+  .day-dropdown {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 14px 16px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23ff5722' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 16px center;
+    background-size: 12px;
+    border-radius: 0;
+  }
+
+  .day-dropdown:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .content {
+    padding: 20px;
+  }
+
+  .day-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 42px;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .day-subtitle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin-bottom: 24px;
+  }
+
+  .rest-day {
+    text-align: center;
+    padding: 60px 20px;
+  }
+
+  .rest-day h2 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 80px;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+    line-height: 0.9;
+    margin-bottom: 16px;
+  }
+
+  .rest-day p {
+    color: var(--text-dim);
+    font-size: 14px;
+    line-height: 1.6;
+    max-width: 280px;
+    margin: 0 auto;
+  }
+
+  .exercise {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    margin-bottom: 12px;
+    overflow: visible;
+    position: relative;
+  }
+
+  .exercise-header {
+    padding: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .exercise-info { flex: 1; min-width: 0; }
+
+  .exercise-name {
+    font-weight: 600;
+    font-size: 15px;
+    margin-bottom: 4px;
+    line-height: 1.3;
+    cursor: text;
+    padding: 2px 4px;
+    margin-left: -4px;
+    border-radius: 2px;
+  }
+
+  .exercise-name:hover {
+    background: var(--surface-2);
+  }
+
+  .exercise-name.editing {
+    background: var(--bg);
+    outline: 1px solid var(--accent);
+  }
+
+  .exercise-target {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+    cursor: text;
+    padding: 2px 4px;
+    margin-left: -4px;
+    border-radius: 2px;
+    display: inline-block;
+  }
+
+  .exercise-target:hover {
+    background: var(--surface-2);
+  }
+
+  .exercise-target.editing {
+    background: var(--bg);
+    outline: 1px solid var(--accent);
+    color: var(--text);
+  }
+
+  /* Inline edit input mimics the look of the surrounding text */
+  .inline-edit {
+    background: transparent;
+    border: none;
+    color: inherit;
+    font-family: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+    letter-spacing: inherit;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    outline: none;
+    border-radius: 0;
+    -webkit-appearance: none;
+  }
+
+  .last-weight {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--accent);
+    margin-left: 12px;
+    flex-shrink: 0;
+    text-align: right;
+  }
+
+  .last-weight .label {
+    display: block;
+    font-size: 9px;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 2px;
+  }
+
+  /* Autocomplete suggestions */
+  .autocomplete-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-top: none;
+    z-index: 50;
+    max-height: 240px;
+    overflow-y: auto;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  }
+
+  .autocomplete-item {
+    padding: 10px 16px;
+    cursor: pointer;
+    font-size: 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .autocomplete-item:last-child { border-bottom: none; }
+
+  .autocomplete-item:hover, .autocomplete-item.active {
+    background: var(--accent-dim);
+  }
+
+  .autocomplete-item .target-hint {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-faint);
+  }
+
+  .sets {
+    border-top: 1px solid var(--border);
+    padding: 16px;
+    background: var(--surface-2);
+    display: none;
+  }
+
+  .exercise.expanded .sets { display: block; }
+
+  .sets-header {
+    display: grid;
+    grid-template-columns: 40px 1fr 1fr 50px;
+    gap: 10px;
+    margin-bottom: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .set-row {
+    display: grid;
+    grid-template-columns: 40px 1fr 1fr 50px;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .set-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    color: var(--text-dim);
+    text-align: center;
+  }
+
+  .set-row input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 12px 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px;
+    width: 100%;
+    text-align: center;
+    border-radius: 0;
+    -webkit-appearance: none;
+  }
+
+  .set-row input:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  .set-done {
+    width: 40px;
+    height: 40px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text-faint);
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    margin-left: auto;
+  }
+
+  .set-done.done {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+  }
+
+  /* Cardio row layout (different from regular sets) */
+  .cardio-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .cardio-fields label {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+  }
+
+  .cardio-fields input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 12px 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px;
+    width: 100%;
+    text-align: center;
+    border-radius: 0;
+    -webkit-appearance: none;
+  }
+
+  .cardio-fields input:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  .history-toggle {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 8px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    width: 100%;
+    margin-top: 4px;
+  }
+
+  .history-toggle:hover { color: var(--text); }
+
+  .history {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--border);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    display: none;
+  }
+
+  .history.show { display: block; }
+
+  .history-entry {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    gap: 8px;
+  }
+
+  .history-entry .date-col { color: var(--text-faint); flex-shrink: 0; }
+  .history-entry .summary-col { text-align: right; word-break: break-word; }
+
+  /* Day-level finish button */
+  .finish-day {
+    width: 100%;
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    padding: 18px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    margin-top: 16px;
+    margin-bottom: 8px;
+  }
+
+  .finish-day:hover { opacity: 0.9; }
+
+  .finish-day:disabled {
+    background: var(--surface-2);
+    color: var(--text-faint);
+    cursor: not-allowed;
+  }
+
+  .finish-day-note {
+    text-align: center;
+    color: var(--text-faint);
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 16px;
+  }
+
+  /* Add exercise button */
+  .add-exercise {
+    width: 100%;
+    background: transparent;
+    border: 1px dashed var(--border);
+    color: var(--text-dim);
+    padding: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    cursor: pointer;
+    margin-bottom: 12px;
+  }
+
+  .add-exercise:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* Delete exercise button (inside expanded view) */
+  .delete-exercise {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-faint);
+    padding: 8px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  .delete-exercise:hover { color: #ff4444; border-color: #ff4444; }
+
+  /* INFO / DATA / REMINDERS pages */
+  .page-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 42px;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .page-subtitle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin-bottom: 24px;
+  }
+
+  .info-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 18px;
+    margin-bottom: 14px;
+  }
+
+  .info-section h3 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+    color: var(--accent);
+  }
+
+  .info-section p, .info-section li {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.6;
+    margin-bottom: 8px;
+  }
+
+  .info-section p:last-child, .info-section li:last-child { margin-bottom: 0; }
+
+  .info-section ul {
+    list-style: none;
+    padding-left: 16px;
+  }
+
+  .info-section ul li::before {
+    content: '→ ';
+    color: var(--accent);
+    margin-left: -16px;
+  }
+
+  .info-section.warning {
+    border-color: var(--accent);
+    background: linear-gradient(180deg, var(--accent-dim) 0%, var(--surface) 60%);
+  }
+
+  .info-section.warning h3 { color: var(--accent); }
+
+  /* Reminders */
+  .notes ul {
+    list-style: none;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.7;
+  }
+
+  .notes li {
+    padding: 6px 0;
+    padding-left: 18px;
+    position: relative;
+  }
+
+  .notes li::before {
+    content: '→';
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+  }
+
+  /* DATA tab */
+  .data-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 18px;
+    margin-bottom: 14px;
+  }
+
+  .data-section h3 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+    color: var(--accent);
+  }
+
+  .data-section p {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    margin-bottom: 12px;
+  }
+
+  .data-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .data-btn {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+  }
+
+  .data-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .data-btn.danger { color: var(--text-faint); grid-column: 1 / -1; }
+  .data-btn.danger:hover { color: #ff4444; border-color: #ff4444; }
+
+  .data-btn.full { grid-column: 1 / -1; }
+
+  /* Modal */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 1001;
+    padding: 20px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-overlay.show { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 20px;
+    width: 100%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .modal h3 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 24px;
+    letter-spacing: 0.05em;
+    margin-bottom: 12px;
+  }
+
+  .modal p {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+    line-height: 1.5;
+  }
+
+  .modal textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    min-height: 200px;
+    resize: vertical;
+    border-radius: 0;
+  }
+
+  .modal-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .modal-btn {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+  }
+
+  .modal-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 700; }
+  .modal-btn.disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* First-launch acknowledgment */
+  .ack-checkbox {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 16px 0;
+    padding: 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    cursor: pointer;
+  }
+
+  .ack-checkbox input {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  .ack-checkbox label {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.4;
+    cursor: pointer;
+  }
+
+  /* Rest Timer Popup */
+  .timer-popup {
+    display: none;
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    padding: 18px 24px;
+    z-index: 1002;
+    min-width: 240px;
+    text-align: center;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  }
+
+  .timer-popup.show { display: block; }
+
+  .timer-popup .timer-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin-bottom: 8px;
+  }
+
+  .timer-popup .timer-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 48px;
+    color: var(--accent);
+    line-height: 1;
+    letter-spacing: 0.05em;
+    margin-bottom: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .timer-popup .timer-value.done {
+    color: var(--success);
+  }
+
+  .timer-popup .dismiss-btn {
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    padding: 10px 28px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 14px;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    width: 100%;
+  }
+
+  .timer-popup .dismiss-btn:hover { opacity: 0.9; }
+
+  /* PR Popup */
+  .pr-popup {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 1003;
+    padding: 20px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .pr-popup.show { display: flex; }
+
+  .pr-popup .pr-modal {
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    padding: 24px;
+    width: 100%;
+    max-width: 420px;
+    max-height: 80vh;
+    overflow-y: auto;
+    text-align: center;
+  }
+
+  .pr-popup .pr-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 56px;
+    color: var(--accent);
+    line-height: 1;
+    letter-spacing: 0.08em;
+    margin-bottom: 20px;
+  }
+
+  .pr-popup .pr-list {
+    text-align: left;
+    margin-bottom: 20px;
+  }
+
+  .pr-popup .pr-entry {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .pr-popup .pr-entry:last-child { border-bottom: none; }
+
+  .pr-popup .pr-entry-name {
+    font-size: 14px;
+    color: var(--text);
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .pr-popup .pr-entry-detail {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  .pr-popup .pr-entry-prev {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-faint);
+    margin-top: 2px;
+  }
+
+  .pr-popup .dismiss-btn {
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    padding: 14px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 16px;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    width: 100%;
+  }
+
+  .pr-popup .dismiss-btn:hover { opacity: 0.9; }
+
+  /* INFO tab settings row */
+  .settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .settings-row:last-child { margin-bottom: 0; }
+
+  .settings-row .label {
+    font-size: 13px;
+    color: var(--text);
+    flex: 1;
+  }
+
+  .settings-row .controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .settings-row select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    border-radius: 0;
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23ff5722' d='M5 6L0 0h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 28px;
+  }
+
+  .settings-row select:focus, .settings-row select:disabled {
+    outline: none;
+  }
+
+  .settings-row select:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* iOS-style toggle */
+  .toggle-switch {
+    position: relative;
+    width: 50px;
+    height: 28px;
+    flex-shrink: 0;
+  }
+
+  .toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .toggle-switch .slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    transition: 0.2s;
+  }
+
+  .toggle-switch .slider::before {
+    content: '';
+    position: absolute;
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background: var(--text-dim);
+    transition: 0.2s;
+  }
+
+  .toggle-switch input:checked + .slider {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+  }
+
+  .toggle-switch input:checked + .slider::before {
+    transform: translateX(22px);
+    background: var(--accent);
+  }
+
+  .loading {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--accent);
+    color: var(--bg);
+    padding: 12px 24px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 700;
+    transition: transform 0.3s;
+    z-index: 1000;
+  }
+
+  .toast.show { transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <div class="logo">LIFT<span class="accent">.</span>LOG</div>
+    <div class="date" id="currentDate"></div>
+  </div>
+  <div class="save-indicator" id="saveIndicator">● Auto-saved</div>
+</div>
+
+<div class="top-tabs" id="topTabs"></div>
+
+<div class="content" id="content">
+  <div class="loading">Loading...</div>
+</div>
+
+<div class="toast" id="toast">Saved</div>
+
+<!-- Rest Timer Popup -->
+<div class="timer-popup" id="timerPopup">
+  <div class="timer-label">Rest</div>
+  <div class="timer-value" id="timerValue">00:00</div>
+  <button class="dismiss-btn" id="timerDismissBtn">Dismiss</button>
+</div>
+
+<!-- PR Popup -->
+<div class="pr-popup" id="prPopup">
+  <div class="pr-modal">
+    <div class="pr-title">NEW PR</div>
+    <div class="pr-list" id="prList"></div>
+    <button class="dismiss-btn" id="prDismissBtn">Dismiss</button>
+  </div>
+</div>
+
+<!-- Custom Confirm Modal (replaces native confirm() for reliability) -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal">
+    <h3 id="confirmTitle">CONFIRM</h3>
+    <p id="confirmBody" style="color: var(--text); white-space: pre-line;"></p>
+    <div class="modal-buttons">
+      <button class="modal-btn" id="confirmCancelBtn">CANCEL</button>
+      <button class="modal-btn primary" id="confirmOkBtn">CONFIRM</button>
+    </div>
+  </div>
+</div>
+
+<!-- Export Modal -->
+<div class="modal-overlay" id="exportModal">
+  <div class="modal">
+    <h3>BACKUP YOUR DATA</h3>
+    <p>This contains ALL your data: workouts, history, custom exercises, and settings. Copy and save somewhere safe (Notes app, email yourself).</p>
+    <textarea id="exportText" readonly></textarea>
+    <div class="modal-buttons">
+      <button class="modal-btn" onclick="closeModal('exportModal')">CLOSE</button>
+      <button class="modal-btn primary" onclick="copyExport()">COPY</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import Modal -->
+<div class="modal-overlay" id="importModal">
+  <div class="modal">
+    <h3>RESTORE DATA</h3>
+    <p>Paste your backup text below. This will overwrite your current data.</p>
+    <textarea id="importText" placeholder="Paste backup data here..."></textarea>
+    <div class="modal-buttons">
+      <button class="modal-btn" onclick="closeModal('importModal')">CANCEL</button>
+      <button class="modal-btn primary" onclick="doImport()">RESTORE</button>
+    </div>
+  </div>
+</div>
+
+<!-- First-launch Acknowledgment Modal (blocks navigation until acknowledged) -->
+<div class="modal-overlay" id="ackModal">
+  <div class="modal">
+    <h3>READ FIRST — DATA WARNING</h3>
+    <p style="color: var(--text); font-size: 14px;"><strong>Your workout data lives ONLY in this browser.</strong></p>
+    <p>If you clear your browser data, switch devices, or uninstall this app, <strong>everything is gone.</strong> There is no cloud backup. There is no account.</p>
+    <p style="color: var(--text);"><strong>What you must do:</strong></p>
+    <ul style="font-size: 13px; color: var(--text-dim); padding-left: 20px; margin-bottom: 12px; line-height: 1.6;">
+      <li>Visit the DATA tab regularly</li>
+      <li>Hit EXPORT and save the text somewhere safe (Notes app, email, anywhere)</li>
+      <li>Do this at least once a week</li>
+      <li>If you ever lose your data, IMPORT brings it back</li>
+    </ul>
+    <div class="ack-checkbox">
+      <input type="checkbox" id="ackCheck">
+      <label for="ackCheck">I understand my data is local only and I'm responsible for backups.</label>
+    </div>
+    <div class="modal-buttons">
+      <button class="modal-btn primary disabled" id="ackProceed" onclick="completeAck()">PROCEED</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ============ DEFAULT WORKOUTS ============
+  // First-time users (and complete resets) get this exact structure.
+  const DEFAULT_WORKOUTS = {
+    push: {
+      name: 'Push',
+      subtitle: 'Chest · Shoulders · Triceps',
+      day: 'MON',
+      exercises: [
+        { id: 'sm_bench', name: 'Smith Machine Bench Press', target: '3 × 6–8' },
+        { id: 'incline_db', name: 'Incline Dumbbell Press', target: '3 × 8–10' },
+        { id: 'sm_shoulder', name: 'Smith Machine Shoulder Press', target: '3 × 8–10' },
+        { id: 'cable_fly', name: 'Cable Chest Fly (mid)', target: '3 × 10–12' },
+        { id: 'cable_lateral', name: 'Cable Lateral Raise (single arm)', target: '3 × 10–12 ea' },
+        { id: 'tri_pushdown', name: 'Tricep Pushdown (rope/bar)', target: '3 × 8–10' },
+        { id: 'cardio_push', name: 'Cardio', target: '', isCardio: true }
+      ]
+    },
+    pull: {
+      name: 'Pull',
+      subtitle: 'Back · Biceps · Rear Delts',
+      day: 'TUE',
+      exercises: [
+        { id: 'lat_pulldown', name: 'Lat Pulldown (standard grip)', target: '3 × 6–8' },
+        { id: 'cable_row', name: 'Seated Cable Row', target: '3 × 8–10' },
+        { id: 'sm_row', name: 'Smith Machine Bent-Over Row', target: '3 × 8–10' },
+        { id: 'face_pull', name: 'Face Pull (cable)', target: '3 × 12–15' },
+        { id: 'ez_curl', name: 'EZ Bar Curl', target: '3 × 8–10' },
+        { id: 'hammer_curl', name: 'Hammer Curl (cable/DB)', target: '3 × 10–12' },
+        { id: 'cardio_pull', name: 'Cardio', target: '', isCardio: true }
+      ]
+    },
+    rest_wed: {
+      name: 'Rest',
+      subtitle: 'Muay Thai + Light Cardio',
+      day: 'WED',
+      rest: true,
+      restMessage: 'Active recovery. Save the lifting for tomorrow.',
+      exercises: [
+        { id: 'cardio_wed', name: 'Cardio', target: '', isCardio: true }
+      ]
+    },
+    legs: {
+      name: 'Legs',
+      subtitle: 'Quads · Hams · Glutes · Calves',
+      day: 'THU',
+      exercises: [
+        { id: 'sm_squat', name: 'Smith Machine Squat', target: '3 × 6–8' },
+        { id: 'rdl', name: 'Romanian Deadlift (Smith/DB)', target: '3 × 8–10' },
+        { id: 'leg_press', name: 'Leg Press', target: '3 × 8–10' },
+        { id: 'ham_curl', name: 'Hamstring Curl', target: '3 × 10–12' },
+        { id: 'leg_ext', name: 'Leg Extension', target: '3 × 10–12' },
+        { id: 'calf', name: 'Calf Raises', target: '3 × 12–15' },
+        { id: 'cardio_legs', name: 'Cardio', target: '', isCardio: true }
+      ]
+    },
+    pump: {
+      name: 'Pump',
+      subtitle: 'Upper Body · Lighter, Higher Rep',
+      day: 'FRI',
+      exercises: [
+        { id: 'db_bench', name: 'Dumbbell Bench Press', target: '3 × 10–12' },
+        { id: 'lat_close', name: 'Lat Pulldown (close grip)', target: '3 × 10–12' },
+        { id: 'cable_fly_pump', name: 'Cable Chest Fly', target: '3 × 10–12' },
+        { id: 'preacher', name: 'Preacher Curl', target: '3 × 10–12' },
+        { id: 'tri_ext', name: 'Tricep Extension (cable)', target: '3 × 10–12' },
+        { id: 'cardio_pump', name: 'Cardio', target: '', isCardio: true }
+      ]
+    },
+    abs: {
+      name: 'Abs',
+      subtitle: 'Core + Cardio · Optional',
+      day: 'SAT',
+      exercises: [
+        { id: 'cable_crunch', name: 'Cable Crunch', target: '3 × 12–15' },
+        { id: 'knee_raise', name: 'Hanging Knee Raise', target: '3 × 10–15' },
+        { id: 'plank', name: 'Plank (seconds)', target: '3 × 30–60s' },
+        { id: 'cardio_abs', name: 'Cardio', target: '', isCardio: true }
+      ]
+    },
+    rest_sun: {
+      name: 'Rest',
+      subtitle: 'Full Recovery',
+      day: 'SUN',
+      rest: true,
+      restMessage: 'Full rest day. Eat, sleep, recover.',
+      exercises: [
+        { id: 'cardio_sun', name: 'Cardio', target: '', isCardio: true }
+      ]
+    }
+  };
+
+  const REMINDERS = [
+    'Last 2 reps should feel hard. If not, add weight.',
+    'Hit the top of the rep range on all 3 sets? Add 5 lb next session.',
+    '60–90 sec rest between sets. Use a timer.',
+    'Diet drives fat loss. Lifting preserves muscle.',
+    'Session over 60 min? You\'re doing too much.',
+    'Tap any exercise name or target text to edit it directly.',
+    'Use the Save Day button to commit all your sets to history.',
+    'Re-saving the same day overwrites that day\'s history entry.'
+  ];
+
+  // ============ AUTOCOMPLETE LIBRARY ============
+  // Common lifts with suggested rep ranges. Used when typing in exercise name field.
+  const EXERCISE_LIBRARY = [
+    { name: 'Smith Machine Bench Press', target: '3 × 6–8' },
+    { name: 'Barbell Bench Press', target: '3 × 6–8' },
+    { name: 'Dumbbell Bench Press', target: '3 × 8–10' },
+    { name: 'Incline Bench Press', target: '3 × 8–10' },
+    { name: 'Incline Dumbbell Press', target: '3 × 8–10' },
+    { name: 'Decline Bench Press', target: '3 × 8–10' },
+    { name: 'Cable Chest Fly', target: '3 × 10–12' },
+    { name: 'Pec Deck', target: '3 × 10–12' },
+    { name: 'Push-Up', target: '3 × AMRAP' },
+    { name: 'Dips', target: '3 × 8–12' },
+    { name: 'Smith Machine Shoulder Press', target: '3 × 8–10' },
+    { name: 'Overhead Press', target: '3 × 6–8' },
+    { name: 'Dumbbell Shoulder Press', target: '3 × 8–10' },
+    { name: 'Cable Lateral Raise', target: '3 × 10–12' },
+    { name: 'Dumbbell Lateral Raise', target: '3 × 10–12' },
+    { name: 'Front Raise', target: '3 × 10–12' },
+    { name: 'Rear Delt Fly', target: '3 × 12–15' },
+    { name: 'Face Pull', target: '3 × 12–15' },
+    { name: 'Shrugs', target: '3 × 10–12' },
+    { name: 'Tricep Pushdown', target: '3 × 8–10' },
+    { name: 'Tricep Extension', target: '3 × 10–12' },
+    { name: 'Skull Crusher', target: '3 × 8–10' },
+    { name: 'Close-Grip Bench Press', target: '3 × 6–8' },
+    { name: 'Overhead Tricep Extension', target: '3 × 10–12' },
+    { name: 'Lat Pulldown', target: '3 × 6–8' },
+    { name: 'Pull-Up', target: '3 × AMRAP' },
+    { name: 'Chin-Up', target: '3 × AMRAP' },
+    { name: 'Seated Cable Row', target: '3 × 8–10' },
+    { name: 'Smith Machine Bent-Over Row', target: '3 × 8–10' },
+    { name: 'Barbell Row', target: '3 × 6–8' },
+    { name: 'Dumbbell Row', target: '3 × 8–10' },
+    { name: 'T-Bar Row', target: '3 × 8–10' },
+    { name: 'Chest-Supported Row', target: '3 × 8–10' },
+    { name: 'Straight-Arm Pulldown', target: '3 × 10–12' },
+    { name: 'Bicep Curl', target: '3 × 8–10' },
+    { name: 'EZ Bar Curl', target: '3 × 8–10' },
+    { name: 'Barbell Curl', target: '3 × 8–10' },
+    { name: 'Dumbbell Curl', target: '3 × 8–10' },
+    { name: 'Hammer Curl', target: '3 × 10–12' },
+    { name: 'Preacher Curl', target: '3 × 10–12' },
+    { name: 'Cable Curl', target: '3 × 10–12' },
+    { name: 'Concentration Curl', target: '3 × 10–12' },
+    { name: 'Smith Machine Squat', target: '3 × 6–8' },
+    { name: 'Barbell Squat', target: '3 × 5–8' },
+    { name: 'Front Squat', target: '3 × 5–8' },
+    { name: 'Goblet Squat', target: '3 × 8–10' },
+    { name: 'Hack Squat', target: '3 × 8–10' },
+    { name: 'Leg Press', target: '3 × 8–10' },
+    { name: 'Romanian Deadlift', target: '3 × 8–10' },
+    { name: 'Conventional Deadlift', target: '3 × 5' },
+    { name: 'Sumo Deadlift', target: '3 × 5' },
+    { name: 'Stiff-Leg Deadlift', target: '3 × 8–10' },
+    { name: 'Bulgarian Split Squat', target: '3 × 8–10' },
+    { name: 'Walking Lunge', target: '3 × 10–12 ea' },
+    { name: 'Reverse Lunge', target: '3 × 8–10 ea' },
+    { name: 'Leg Extension', target: '3 × 10–12' },
+    { name: 'Hamstring Curl', target: '3 × 10–12' },
+    { name: 'Seated Leg Curl', target: '3 × 10–12' },
+    { name: 'Calf Raises', target: '3 × 12–15' },
+    { name: 'Seated Calf Raise', target: '3 × 12–15' },
+    { name: 'Standing Calf Raise', target: '3 × 12–15' },
+    { name: 'Hip Thrust', target: '3 × 8–10' },
+    { name: 'Glute Bridge', target: '3 × 10–12' },
+    { name: 'Hip Abduction', target: '3 × 12–15' },
+    { name: 'Hip Adduction', target: '3 × 12–15' },
+    { name: 'Cable Crunch', target: '3 × 12–15' },
+    { name: 'Crunches', target: '3 × 15–20' },
+    { name: 'Sit-Up', target: '3 × 15–20' },
+    { name: 'Hanging Knee Raise', target: '3 × 10–15' },
+    { name: 'Hanging Leg Raise', target: '3 × 8–12' },
+    { name: 'Lying Leg Raise', target: '3 × 12–15' },
+    { name: 'Plank', target: '3 × 30–60s' },
+    { name: 'Side Plank', target: '3 × 30–45s ea' },
+    { name: 'Russian Twist', target: '3 × 15–20' },
+    { name: 'Wood Chopper', target: '3 × 10–12 ea' },
+    { name: 'Ab Wheel Rollout', target: '3 × 8–12' },
+    { name: 'Wrist Curl', target: '3 × 12–15' },
+    { name: 'Reverse Wrist Curl', target: '3 × 12–15' },
+    { name: 'Farmer\'s Walk', target: '3 × 30–60s' }
+  ];
+
+  const STORAGE_KEY = 'liftlog_data_v2';
+  const LEGACY_KEY = 'liftlog_data_v1';
+
+  // ============ STATE ============
+  // state.workouts: full workouts structure (mutable, customizable)
+  // state.exerciseData: { [exerciseId]: { sets: [...], history: [...] } }
+  // state.dayHistory: { [dayKey]: { [dateStr]: { entries: [...], cardio: {...} } } }
+  // state.currentTab: 'info' | 'data' | 'reminders' | 'day'
+  // state.currentDay: dayKey for the day view
+  // state.acknowledged: bool — has user acknowledged the data warning
+  let state = {};
+  let storageWorks = false;
+  let activeAutocomplete = null;
+
+  // ============ STORAGE ============
+  function tryLocalStorage() {
+    try {
+      const test = '__test__';
+      localStorage.setItem(test, test);
+      localStorage.removeItem(test);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function getDefaultState() {
+    return {
+      workouts: deepClone(DEFAULT_WORKOUTS),
+      exerciseData: {},
+      currentTab: 'info',
+      currentDay: null,
+      acknowledged: false,
+      timerEnabled: true,
+      timerDuration: 90
+    };
+  }
+
+  function deepClone(obj) {
+    return JSON.parse(JSON.stringify(obj));
+  }
+
+  function loadState() {
+    storageWorks = tryLocalStorage();
+    if (!storageWorks) {
+      state = getDefaultState();
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        state = JSON.parse(raw);
+        // Backfill any missing fields if older v2 saves are loaded
+        if (!state.workouts) state.workouts = deepClone(DEFAULT_WORKOUTS);
+        if (!state.exerciseData) state.exerciseData = {};
+        if (typeof state.acknowledged !== 'boolean') state.acknowledged = false;
+        if (!state.currentTab) state.currentTab = 'info';
+        if (typeof state.timerEnabled !== 'boolean') state.timerEnabled = true;
+        if (typeof state.timerDuration !== 'number') state.timerDuration = 90;
+        return;
+      }
+      // Try migrating from v1 (the old flat key/value structure)
+      const legacy = localStorage.getItem(LEGACY_KEY);
+      if (legacy) {
+        const v1 = JSON.parse(legacy);
+        state = migrateV1(v1);
+        saveState();
+        return;
+      }
+    } catch (e) {
+      console.error('Load failed:', e);
+    }
+    state = getDefaultState();
+  }
+
+  // Migrate old v1 format (flat exercise-id keyed object) to v2 structure.
+  function migrateV1(v1) {
+    const fresh = getDefaultState();
+    for (const key in v1) {
+      if (key === '_lastDay') {
+        if (fresh.workouts[v1._lastDay]) fresh.currentDay = v1._lastDay;
+        continue;
+      }
+      if (v1[key] && v1[key].sets && v1[key].history) {
+        fresh.exerciseData[key] = v1[key];
+      }
+    }
+    return fresh;
+  }
+
+  function saveState() {
+    if (!storageWorks) {
+      updateSaveIndicator('warning', '⚠ In-memory only — back up your data');
+      return;
+    }
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      updateSaveIndicator('saved', '● Auto-saved');
+    } catch (e) {
+      updateSaveIndicator('warning', '⚠ Save failed');
+      console.error('Save failed:', e);
+    }
+  }
+
+  function updateSaveIndicator(type, text) {
+    const el = document.getElementById('saveIndicator');
+    if (el) {
+      el.textContent = text;
+      el.className = 'save-indicator ' + (type === 'saved' ? 'saved' : '');
+    }
+  }
+
+  function getExerciseData(exerciseId) {
+    if (!state.exerciseData[exerciseId]) {
+      state.exerciseData[exerciseId] = {
+        sets: [{w:'',r:'',d:false},{w:'',r:'',d:false},{w:'',r:'',d:false}],
+        history: []
+      };
+    }
+    // Make sure shape is right
+    if (!state.exerciseData[exerciseId].sets) {
+      state.exerciseData[exerciseId].sets = [{w:'',r:'',d:false},{w:'',r:'',d:false},{w:'',r:'',d:false}];
+    }
+    if (!state.exerciseData[exerciseId].history) {
+      state.exerciseData[exerciseId].history = [];
+    }
+    return state.exerciseData[exerciseId];
+  }
+
+  function getCardioData(exerciseId) {
+    if (!state.exerciseData[exerciseId]) {
+      state.exerciseData[exerciseId] = {
+        cardio: { time: '', distance: '' },
+        history: []
+      };
+    }
+    if (!state.exerciseData[exerciseId].cardio) {
+      state.exerciseData[exerciseId].cardio = { time: '', distance: '' };
+    }
+    if (!state.exerciseData[exerciseId].history) {
+      state.exerciseData[exerciseId].history = [];
+    }
+    return state.exerciseData[exerciseId];
+  }
+
+  // ============ TOP TABS ============
+  function getDayLabel() {
+    if (!state.currentDay) return 'TODAY';
+    const w = state.workouts[state.currentDay];
+    if (!w) return 'TODAY';
+    return `${w.day} — ${w.name.toUpperCase()}`;
+  }
+
+  function renderTopTabs() {
+    const tabs = document.getElementById('topTabs');
+    const tabsConfig = [
+      { id: 'info', label: 'INFO' },
+      { id: 'data', label: 'DATA + SETNG' },
+      { id: 'reminders', label: 'REMINDERS' },
+      { id: 'day', label: getDayLabel(), isDay: true }
+    ];
+
+    tabs.innerHTML = tabsConfig.map(t => `
+      <button class="top-tab ${state.currentTab === t.id ? 'active' : ''} ${t.isDay ? 'day-tab' : ''}" data-tab="${t.id}">
+        ${t.label}
+      </button>
+    `).join('');
+
+    tabs.querySelectorAll('.top-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        // Block navigation if not yet acknowledged
+        if (!state.acknowledged && btn.dataset.tab !== 'info') {
+          showAck();
+          return;
+        }
+        switchTab(btn.dataset.tab);
+      });
+    });
+  }
+
+  function switchTab(tabId) {
+    state.currentTab = tabId;
+    saveState();
+    renderTopTabs();
+    renderContent();
+    window.scrollTo(0, 0);
+  }
+
+  // ============ CONTENT RENDER ============
+  function renderContent() {
+    const content = document.getElementById('content');
+    if (state.currentTab === 'info') renderInfo(content);
+    else if (state.currentTab === 'data') renderData(content);
+    else if (state.currentTab === 'reminders') renderReminders(content);
+    else if (state.currentTab === 'day') renderDay(content);
+  }
+
+  function renderInfo(content) {
+    content.innerHTML = `
+      <h1 class="page-title">INFO</h1>
+      <div class="page-subtitle">How this app works</div>
+
+      <div class="info-section warning">
+        <h3>⚠ Data Warning</h3>
+        <p><strong>Your data is stored only in this browser.</strong> Clearing browser data, switching devices, or uninstalling = total loss.</p>
+        <p>Visit the DATA + SETNG tab and EXPORT regularly. There is no cloud, no account, no automatic backup.</p>
+      </div>
+
+      <div class="info-section">
+        <h3>Daily Use</h3>
+        <p>The day tab on the right defaults to today. Use the dropdown inside it to view a different day.</p>
+        <p>Tap any exercise to expand it. Type in weight + reps, tap the circle to mark a set as done.</p>
+        <p>When done with the workout, hit <strong>SAVE DAY</strong> at the bottom. This commits all sets to history and resets the tickers (your weight + rep numbers stay so you have a starting point next session).</p>
+      </div>
+
+      <div class="info-section">
+        <h3>Editing Exercises</h3>
+        <p>Tap on any exercise <strong>name</strong> or <strong>target</strong> (sets × reps) to edit it. As you type a name, suggestions appear — picking one auto-fills the suggested rep range.</p>
+        <p>The <strong>+ ADD EXERCISE</strong> button at the top of each day adds a custom exercise. Inside an expanded exercise, the <strong>DELETE</strong> button removes it.</p>
+      </div>
+
+      <div class="info-section">
+        <h3>Cardio Row</h3>
+        <p>Every day has a Cardio row at the bottom. Just two fields: time and distance. Logged with the day's history when you save.</p>
+      </div>
+
+      <div class="info-section">
+        <h3>Save Day Behavior</h3>
+        <p>Saving creates one history entry per exercise per calendar day. <strong>Re-saving the same day overwrites that day's entry</strong> with the latest numbers. So you can keep adjusting throughout your workout.</p>
+        <p>The <strong>LAST TOP</strong> shown next to each exercise updates after each save, so you know what to beat next time.</p>
+        <p>If a save beats your previous best (highest weight, or matching weight at higher reps), a <strong>NEW PR</strong> notification appears.</p>
+      </div>
+
+      <div class="info-section">
+        <h3>Reordering Workout Days</h3>
+        <p>The DATA + SETNG tab has a <strong>Day Assignment</strong> section where you can shift workouts around the week. Pick a day, choose a workout for it, and they swap places. All your data — exercises, history, last tops, custom changes — moves with the workout.</p>
+      </div>
+
+      <div class="info-section">
+        <h3>Reset to Defaults</h3>
+        <p>The DATA + SETNG tab has a <strong>RESET TO DEFAULTS</strong> button. This wipes everything (workouts, customizations, history) and restores the original 7-day split. Use with care — export first if you want to keep anything.</p>
+      </div>
+    `;
+  }
+
+  function renderData(content) {
+    // Build day assignment dropdowns
+    const weekOrder = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
+
+    // Resolve workout name display, suffixing duplicates with (1), (2)...
+    const workoutEntries = Object.entries(state.workouts);
+    const nameCount = {};
+    workoutEntries.forEach(([k, w]) => {
+      const n = w.name.toUpperCase();
+      nameCount[n] = (nameCount[n] || 0) + 1;
+    });
+    const seenSoFar = {};
+    const optionLabel = {};
+    workoutEntries.forEach(([k, w]) => {
+      const n = w.name.toUpperCase();
+      if (nameCount[n] > 1) {
+        seenSoFar[n] = (seenSoFar[n] || 0) + 1;
+        optionLabel[k] = `${n} (${seenSoFar[n]})`;
+      } else {
+        optionLabel[k] = n;
+      }
+    });
+
+    // For each weekday, find the currently assigned workout key (first match)
+    const assignedKey = {};
+    weekOrder.forEach(d => {
+      const found = workoutEntries.find(([k, w]) => w.day === d);
+      assignedKey[d] = found ? found[0] : null;
+    });
+
+    const dayRowsHtml = weekOrder.map(d => `
+      <div class="settings-row">
+        <div class="label" style="font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 0.08em;">${d}</div>
+        <div class="controls">
+          <select class="day-assign" data-weekday="${d}">
+            ${workoutEntries.map(([k, w]) =>
+              `<option value="${k}" ${k === assignedKey[d] ? 'selected' : ''}>${optionLabel[k]}</option>`
+            ).join('')}
+          </select>
+        </div>
+      </div>
+    `).join('');
+
+    content.innerHTML = `
+      <h1 class="page-title">DATA + SETNG</h1>
+      <div class="page-subtitle">Settings · Backup · Restore · Reset</div>
+
+      <div class="data-section">
+        <h3>Settings</h3>
+        <div class="settings-row">
+          <div class="label">Rest Timer</div>
+          <div class="controls">
+            <select id="timerDurationSelect" ${state.timerEnabled ? '' : 'disabled'}>
+              <option value="60" ${state.timerDuration === 60 ? 'selected' : ''}>60 sec</option>
+              <option value="90" ${state.timerDuration === 90 ? 'selected' : ''}>90 sec</option>
+              <option value="120" ${state.timerDuration === 120 ? 'selected' : ''}>120 sec</option>
+            </select>
+            <label class="toggle-switch">
+              <input type="checkbox" id="timerEnabledToggle" ${state.timerEnabled ? 'checked' : ''}>
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+        <p style="font-size: 12px; color: var(--text-dim); margin-top: 8px; margin-bottom: 16px;">When on, a timer pops up after each completed set. Dismiss anytime.</p>
+
+        <div style="border-top: 1px solid var(--border); padding-top: 14px; margin-top: 6px;">
+          <div style="font-family: 'Bebas Neue', sans-serif; font-size: 16px; letter-spacing: 0.08em; color: var(--accent); margin-bottom: 4px;">Day Assignment</div>
+          <p style="font-size: 12px; color: var(--text-dim); margin-bottom: 12px;">Pick a workout for each day. Selecting a workout swaps it with whatever was already on that day. All data moves with the workout.</p>
+          ${dayRowsHtml}
+        </div>
+      </div>
+
+      <div class="data-section">
+        <h3>⚠ Read This</h3>
+        <p style="color: var(--text);"><strong>Everything you see in this app — workouts, history, customizations — lives only on this device, in this browser.</strong></p>
+        <p>If you clear browser data, switch phones, or your phone gets wiped, it's gone unless you've exported.</p>
+        <p style="color: var(--text);"><strong>Export at least weekly.</strong> Save the text in your Notes app, email it to yourself, or paste it into Google Drive.</p>
+      </div>
+
+      <div class="data-section">
+        <h3>Backup & Restore</h3>
+        <p>Export covers ALL data: workouts, history, custom exercises, settings. Import will overwrite everything currently in the app.</p>
+        <div class="data-buttons">
+          <button class="data-btn" id="exportBtn">Export</button>
+          <button class="data-btn" id="importBtn">Import</button>
+        </div>
+      </div>
+
+      <div class="data-section">
+        <h3>Danger Zone</h3>
+        <p>Reset wipes all data and customizations, returning the app to its default state — same as a first-time install.</p>
+        <div class="data-buttons">
+          <button class="data-btn danger" id="resetAllBtn">Reset to Defaults</button>
+        </div>
+      </div>
+    `;
+
+    // Wire up Rest Timer controls
+    const toggle = document.getElementById('timerEnabledToggle');
+    const durSelect = document.getElementById('timerDurationSelect');
+    if (toggle) {
+      toggle.addEventListener('change', (e) => {
+        state.timerEnabled = e.target.checked;
+        if (durSelect) durSelect.disabled = !state.timerEnabled;
+        saveState();
+      });
+    }
+    if (durSelect) {
+      durSelect.addEventListener('change', (e) => {
+        state.timerDuration = parseInt(e.target.value);
+        saveState();
+      });
+    }
+
+    // Wire up Day Assignment dropdowns
+    document.querySelectorAll('.day-assign').forEach(sel => {
+      sel.addEventListener('change', (e) => {
+        const targetDay = e.target.dataset.weekday;
+        const newKey = e.target.value;
+        const newWorkout = state.workouts[newKey];
+        if (!newWorkout) return;
+
+        // If the picked workout is already on this day, no-op
+        if (newWorkout.day === targetDay) return;
+
+        // Find the workout currently on the target day (if any) and swap days
+        const oldDayOfNew = newWorkout.day;
+        const currentOnTarget = Object.values(state.workouts).find(w => w.day === targetDay && w !== newWorkout);
+
+        newWorkout.day = targetDay;
+        if (currentOnTarget) currentOnTarget.day = oldDayOfNew;
+
+        // If currentDay tab is pointing at the moved workout, keep tracking it
+        // (currentDay key stays the same since keys don't change — only .day changes)
+        saveState();
+        renderTopTabs();
+        renderContent(); // re-render DATA to refresh dropdowns
+      });
+    });
+
+    document.getElementById('exportBtn').addEventListener('click', openExport);
+    document.getElementById('importBtn').addEventListener('click', openImport);
+    document.getElementById('resetAllBtn').addEventListener('click', async () => {
+      const ok = await customConfirm(
+        'This wipes ALL workout customizations and history. The app returns to its original state. This CANNOT be undone.\n\nMake sure you have an Export saved first.',
+        'RESET TO DEFAULTS?'
+      );
+      if (ok) {
+        const ack = state.acknowledged;
+        state = getDefaultState();
+        state.acknowledged = ack; // keep their acknowledgment
+        saveState();
+        renderTopTabs();
+        renderContent();
+        showToast('Reset complete');
+      }
+    });
+  }
+
+  function renderReminders(content) {
+    content.innerHTML = `
+      <h1 class="page-title">REMINDERS</h1>
+      <div class="page-subtitle">Things to keep in mind</div>
+      <div class="info-section notes">
+        <ul>
+          ${REMINDERS.map(r => `<li>${r}</li>`).join('')}
+        </ul>
+      </div>
+    `;
+  }
+
+  function renderDay(content) {
+    // Default to today's matching workout if not set
+    if (!state.currentDay || !state.workouts[state.currentDay]) {
+      state.currentDay = pickDefaultDay();
+    }
+
+    const workout = state.workouts[state.currentDay];
+
+    // Day dropdown — sort options by weekday order (MON-SUN) for clarity after reassignment
+    const weekOrder = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
+    const sortedEntries = Object.entries(state.workouts).slice().sort((a, b) => {
+      const ai = weekOrder.indexOf(a[1].day);
+      const bi = weekOrder.indexOf(b[1].day);
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+    });
+    const dropdownHtml = `
+      <div class="day-selector">
+        <select class="day-dropdown" id="dayDropdown">
+          ${sortedEntries.map(([key, w]) =>
+            `<option value="${key}" ${key === state.currentDay ? 'selected' : ''}>${w.day} — ${w.name.toUpperCase()}</option>`
+          ).join('')}
+        </select>
+      </div>
+    `;
+
+    // Title
+    const titleHtml = `
+      <h1 class="day-title">${workout.name.toUpperCase()}</h1>
+      <div class="day-subtitle">${workout.subtitle}</div>
+    `;
+
+    // Rest day display (still shows cardio if defined)
+    if (workout.rest && (!workout.exercises || workout.exercises.length === 0)) {
+      content.innerHTML = dropdownHtml + titleHtml + `
+        <div class="rest-day">
+          <h2>REST</h2>
+          <p>${workout.restMessage || ''}</p>
+        </div>
+      `;
+      attachDayListeners();
+      return;
+    }
+
+    // Exercises
+    const exercisesHtml = (workout.exercises || []).map((ex, idx) => renderExerciseCard(ex, idx)).join('');
+
+    const restMessageHtml = workout.rest && workout.restMessage
+      ? `<div style="text-align:center; padding: 30px 20px 10px; color: var(--accent); font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 0.05em;">REST DAY</div>
+         <p style="text-align:center; color: var(--text-dim); font-size: 13px; margin-bottom: 20px; padding: 0 20px;">${workout.restMessage}</p>`
+      : '';
+
+    content.innerHTML = dropdownHtml + titleHtml + restMessageHtml + exercisesHtml + `
+      <button class="add-exercise" id="addExerciseBtn">+ Add Exercise</button>
+      <button class="finish-day" id="finishDayBtn">SAVE DAY</button>
+      <div class="finish-day-note">Logs history and resets tickers. Weight & reps stay.</div>
+    `;
+
+    attachDayListeners();
+  }
+
+  function renderExerciseCard(ex, idx) {
+    const isCardio = !!ex.isCardio;
+
+    if (isCardio) {
+      const data = getCardioData(ex.id);
+      const lastEntry = data.history[data.history.length - 1];
+      const lastSummary = lastEntry ? `${lastEntry.summary}` : '—';
+
+      const historyHtml = data.history.length > 0
+        ? data.history.slice(-5).reverse().map(h => `
+            <div class="history-entry">
+              <span class="date-col">${h.date}</span>
+              <span class="summary-col">${h.summary}</span>
+            </div>
+          `).join('')
+        : '<div class="history-entry"><span>No history yet.</span></div>';
+
+      return `
+        <div class="exercise" data-exercise="${ex.id}" data-idx="${idx}" data-cardio="true">
+          <div class="exercise-header">
+            <div class="exercise-info">
+              <div class="exercise-name" data-edit-name>${escapeHtml(ex.name)}</div>
+              <div class="exercise-target" data-edit-target>${escapeHtml(ex.target || 'time + distance')}</div>
+            </div>
+            <div class="last-weight">
+              <span class="label">Last</span>
+              ${lastSummary}
+            </div>
+          </div>
+          <div class="sets">
+            <div class="cardio-fields">
+              <div>
+                <label>Time (min)</label>
+                <input type="number" inputmode="decimal" placeholder="min" value="${data.cardio.time || ''}" data-cardio-field="time">
+              </div>
+              <div>
+                <label>Distance (mi)</label>
+                <input type="number" inputmode="decimal" placeholder="mi" value="${data.cardio.distance || ''}" data-cardio-field="distance">
+              </div>
+            </div>
+            <button class="history-toggle" data-action="toggle-history">View History</button>
+            <div class="history">
+              ${historyHtml}
+            </div>
+            <button class="delete-exercise" data-action="delete">Delete Exercise</button>
+          </div>
+        </div>
+      `;
+    }
+
+    // Regular exercise
+    const data = getExerciseData(ex.id);
+    const lastEntry = data.history[data.history.length - 1];
+    const lastWeight = lastEntry && lastEntry.topWeight !== undefined
+      ? (lastEntry.topReps ? `${lastEntry.topWeight} × ${lastEntry.topReps}` : `${lastEntry.topWeight} lb`)
+      : '—';
+
+    const setsHtml = data.sets.map((set, i) => `
+      <div class="set-row" data-exercise="${ex.id}" data-set="${i}">
+        <div class="set-num">${i+1}</div>
+        <input type="number" inputmode="decimal" placeholder="lb" value="${set.w}" data-field="w">
+        <input type="number" inputmode="numeric" placeholder="reps" value="${set.r}" data-field="r">
+        <button class="set-done ${set.d ? 'done' : ''}" data-field="d">${set.d ? '✓' : '○'}</button>
+      </div>
+    `).join('');
+
+    const historyHtml = data.history.length > 0
+      ? data.history.slice(-5).reverse().map(h => `
+          <div class="history-entry">
+            <span class="date-col">${h.date}</span>
+            <span class="summary-col">${h.summary}</span>
+          </div>
+        `).join('')
+      : '<div class="history-entry"><span>No history yet.</span></div>';
+
+    return `
+      <div class="exercise" data-exercise="${ex.id}" data-idx="${idx}">
+        <div class="exercise-header">
+          <div class="exercise-info">
+            <div class="exercise-name" data-edit-name>${escapeHtml(ex.name)}</div>
+            <div class="exercise-target" data-edit-target>${escapeHtml(ex.target)}</div>
+          </div>
+          <div class="last-weight">
+            <span class="label">Last Top</span>
+            ${lastWeight}
+          </div>
+        </div>
+        <div class="sets">
+          <div class="sets-header">
+            <div></div>
+            <div>Weight</div>
+            <div>Reps</div>
+            <div></div>
+          </div>
+          ${setsHtml}
+          <button class="history-toggle" data-action="toggle-history">View History</button>
+          <div class="history">
+            ${historyHtml}
+          </div>
+          <button class="delete-exercise" data-action="delete">Delete Exercise</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function escapeHtml(s) {
+    if (s === undefined || s === null) return '';
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // ============ DAY LISTENERS ============
+  function attachDayListeners() {
+    // Day dropdown
+    const dd = document.getElementById('dayDropdown');
+    if (dd) {
+      dd.addEventListener('change', (e) => {
+        state.currentDay = e.target.value;
+        saveState();
+        renderTopTabs();
+        renderContent();
+      });
+    }
+
+    // Expand/collapse
+    document.querySelectorAll('.exercise-header').forEach(header => {
+      header.addEventListener('click', (e) => {
+        // Don't toggle if user is editing inline
+        if (e.target.closest('.inline-edit') || e.target.classList.contains('editing')) return;
+        header.parentElement.classList.toggle('expanded');
+      });
+    });
+
+    // Inline editable name
+    document.querySelectorAll('[data-edit-name]').forEach(el => {
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        startEditName(el);
+      });
+    });
+
+    // Inline editable target
+    document.querySelectorAll('[data-edit-target]').forEach(el => {
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        startEditTarget(el);
+      });
+    });
+
+    // Set inputs
+    document.querySelectorAll('.set-row input').forEach(input => {
+      input.addEventListener('change', handleSetChange);
+      input.addEventListener('blur', handleSetChange);
+    });
+
+    // Set done
+    document.querySelectorAll('.set-done').forEach(btn => {
+      btn.addEventListener('click', handleSetDone);
+    });
+
+    // Cardio inputs
+    document.querySelectorAll('[data-cardio-field]').forEach(input => {
+      input.addEventListener('change', handleCardioChange);
+      input.addEventListener('blur', handleCardioChange);
+    });
+
+    // History toggles
+    document.querySelectorAll('[data-action="toggle-history"]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const history = btn.parentElement.querySelector('.history');
+        history.classList.toggle('show');
+        btn.textContent = history.classList.contains('show') ? 'Hide History' : 'View History';
+      });
+    });
+
+    // Delete buttons
+    document.querySelectorAll('[data-action="delete"]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const exerciseEl = btn.closest('.exercise');
+        const exerciseId = exerciseEl.dataset.exercise;
+        const exercise = state.workouts[state.currentDay].exercises.find(x => x.id === exerciseId);
+        if (!exercise) return;
+        const ok = await customConfirm(
+          `Delete "${exercise.name}" from ${state.workouts[state.currentDay].name.toUpperCase()}?`,
+          'DELETE EXERCISE'
+        );
+        if (ok) {
+          state.workouts[state.currentDay].exercises = state.workouts[state.currentDay].exercises.filter(x => x.id !== exerciseId);
+          saveState();
+          renderContent();
+          showToast('Deleted');
+        }
+      });
+    });
+
+    // Add exercise
+    const addBtn = document.getElementById('addExerciseBtn');
+    if (addBtn) {
+      addBtn.addEventListener('click', () => {
+        const newId = 'custom_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+        if (!state.workouts[state.currentDay].exercises) state.workouts[state.currentDay].exercises = [];
+        // Insert before the cardio row (last one) if it exists, otherwise at end
+        const exercises = state.workouts[state.currentDay].exercises;
+        const cardioIdx = exercises.findIndex(e => e.isCardio);
+        const newExercise = { id: newId, name: 'New Exercise', target: '3 × 8–10' };
+        if (cardioIdx >= 0) {
+          exercises.splice(cardioIdx, 0, newExercise);
+        } else {
+          exercises.push(newExercise);
+        }
+        saveState();
+        renderContent();
+        showToast('Added');
+      });
+    }
+
+    // Finish day
+    const finishBtn = document.getElementById('finishDayBtn');
+    if (finishBtn) {
+      finishBtn.addEventListener('click', finishDay);
+    }
+  }
+
+  // ============ INLINE EDIT ============
+  function startEditName(el) {
+    if (el.classList.contains('editing')) return;
+    closeAutocomplete();
+
+    const exerciseEl = el.closest('.exercise');
+    const exerciseId = exerciseEl.dataset.exercise;
+    const exercise = state.workouts[state.currentDay].exercises.find(x => x.id === exerciseId);
+    if (!exercise) return;
+
+    const currentValue = exercise.name;
+    el.classList.add('editing');
+    el.innerHTML = `<input type="text" class="inline-edit" value="${escapeHtml(currentValue)}" autocomplete="off">`;
+    const input = el.querySelector('input');
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+
+    // Autocomplete
+    setupAutocomplete(input, exerciseEl, exercise);
+
+    let committed = false;
+    const commit = () => {
+      if (committed) return;
+      committed = true;
+      const newName = input.value.trim() || currentValue;
+      exercise.name = newName;
+      el.classList.remove('editing');
+      el.innerHTML = escapeHtml(newName);
+      closeAutocomplete();
+      saveState();
+    };
+
+    input.addEventListener('blur', () => {
+      // Delay to let autocomplete clicks register first
+      setTimeout(commit, 150);
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        input.blur();
+      } else if (e.key === 'Escape') {
+        committed = true;
+        el.classList.remove('editing');
+        el.innerHTML = escapeHtml(currentValue);
+        closeAutocomplete();
+      }
+    });
+  }
+
+  function startEditTarget(el) {
+    if (el.classList.contains('editing')) return;
+    closeAutocomplete();
+
+    const exerciseEl = el.closest('.exercise');
+    const exerciseId = exerciseEl.dataset.exercise;
+    const exercise = state.workouts[state.currentDay].exercises.find(x => x.id === exerciseId);
+    if (!exercise) return;
+
+    const currentValue = exercise.target || '';
+    el.classList.add('editing');
+    el.innerHTML = `<input type="text" class="inline-edit" value="${escapeHtml(currentValue)}" autocomplete="off">`;
+    const input = el.querySelector('input');
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+
+    let committed = false;
+    const commit = () => {
+      if (committed) return;
+      committed = true;
+      const newVal = input.value.trim();
+      exercise.target = newVal;
+      el.classList.remove('editing');
+      el.innerHTML = escapeHtml(newVal || (exercise.isCardio ? 'time + distance' : ''));
+      saveState();
+    };
+
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        input.blur();
+      } else if (e.key === 'Escape') {
+        committed = true;
+        el.classList.remove('editing');
+        el.innerHTML = escapeHtml(currentValue);
+      }
+    });
+  }
+
+  // ============ AUTOCOMPLETE ============
+  function setupAutocomplete(input, exerciseEl, exercise) {
+    const updateSuggestions = () => {
+      const query = input.value.trim().toLowerCase();
+      if (query.length < 1) {
+        closeAutocomplete();
+        return;
+      }
+      const matches = EXERCISE_LIBRARY
+        .filter(item => item.name.toLowerCase().includes(query))
+        .slice(0, 6);
+      if (matches.length === 0) {
+        closeAutocomplete();
+        return;
+      }
+      showAutocomplete(matches, input, exerciseEl, exercise);
+    };
+
+    input.addEventListener('input', updateSuggestions);
+    updateSuggestions();
+  }
+
+  function showAutocomplete(matches, input, exerciseEl, exercise) {
+    closeAutocomplete();
+    const list = document.createElement('div');
+    list.className = 'autocomplete-list';
+    list.innerHTML = matches.map(m => `
+      <div class="autocomplete-item" data-name="${escapeHtml(m.name)}" data-target="${escapeHtml(m.target)}">
+        <span>${escapeHtml(m.name)}</span>
+        <span class="target-hint">${escapeHtml(m.target)}</span>
+      </div>
+    `).join('');
+    exerciseEl.appendChild(list);
+    activeAutocomplete = list;
+
+    list.querySelectorAll('.autocomplete-item').forEach(item => {
+      item.addEventListener('mousedown', (e) => {
+        // mousedown fires before blur, so we can update before commit
+        e.preventDefault();
+        input.value = item.dataset.name;
+        // Update target
+        exercise.target = item.dataset.target;
+        // Commit name immediately
+        input.blur();
+        // Re-render to show updated target
+        setTimeout(() => {
+          renderContent();
+          // Re-expand the same exercise so user doesn't lose context
+          const card = document.querySelector(`.exercise[data-exercise="${exercise.id}"]`);
+          if (card) card.classList.add('expanded');
+        }, 200);
+      });
+    });
+  }
+
+  function closeAutocomplete() {
+    if (activeAutocomplete) {
+      activeAutocomplete.remove();
+      activeAutocomplete = null;
+    }
+  }
+
+  // ============ HANDLERS ============
+  function handleSetChange(e) {
+    const row = e.target.closest('.set-row');
+    const exerciseId = row.dataset.exercise;
+    const setIdx = parseInt(row.dataset.set);
+    const field = e.target.dataset.field;
+    const data = getExerciseData(exerciseId);
+    data.sets[setIdx][field] = e.target.value;
+    saveState();
+  }
+
+  function handleSetDone(e) {
+    e.stopPropagation();
+    const row = e.target.closest('.set-row');
+    const exerciseId = row.dataset.exercise;
+    const setIdx = parseInt(row.dataset.set);
+    const data = getExerciseData(exerciseId);
+    const wasChecked = data.sets[setIdx].d;
+    data.sets[setIdx].d = !wasChecked;
+    e.target.classList.toggle('done');
+    e.target.textContent = data.sets[setIdx].d ? '✓' : '○';
+    saveState();
+    // Start rest timer only when checking ON, not when unchecking
+    if (!wasChecked && state.timerEnabled) {
+      startRestTimer(state.timerDuration);
+    }
+  }
+
+  function handleCardioChange(e) {
+    const exerciseEl = e.target.closest('.exercise');
+    const exerciseId = exerciseEl.dataset.exercise;
+    const field = e.target.dataset.cardioField;
+    const data = getCardioData(exerciseId);
+    data.cardio[field] = e.target.value;
+    saveState();
+  }
+
+  // ============ FINISH DAY ============
+  // Commits all exercises in the current day to history. Same-day re-saves overwrite.
+  // Resets the "done" tickers but keeps weight + reps for continuity.
+  function finishDay() {
+    const workout = state.workouts[state.currentDay];
+    if (!workout || !workout.exercises) {
+      showToast('Nothing to save');
+      return;
+    }
+
+    const today = new Date();
+    const dateStr = `${(today.getMonth()+1).toString().padStart(2,'0')}/${today.getDate().toString().padStart(2,'0')}/${today.getFullYear().toString().slice(-2)}`;
+    const isoDate = today.toISOString().slice(0, 10); // YYYY-MM-DD for matching same-day
+
+    let savedCount = 0;
+    const newPRs = [];
+
+    workout.exercises.forEach(ex => {
+      if (ex.isCardio) {
+        const data = getCardioData(ex.id);
+        if (data.cardio.time || data.cardio.distance) {
+          const summary = [
+            data.cardio.time ? `${data.cardio.time}min` : null,
+            data.cardio.distance ? `${data.cardio.distance}mi` : null
+          ].filter(Boolean).join(' / ');
+          // Remove any existing same-day entry
+          data.history = data.history.filter(h => h.iso !== isoDate);
+          data.history.push({ date: dateStr, iso: isoDate, summary });
+          if (data.history.length > 60) data.history = data.history.slice(-60);
+          savedCount++;
+        }
+      } else {
+        const data = getExerciseData(ex.id);
+        const validSets = data.sets.filter(s => s.w && s.r);
+        if (validSets.length === 0) return;
+
+        const topWeight = Math.max(...validSets.map(s => parseFloat(s.w) || 0));
+        // Find highest rep count among sets at the top weight
+        const topReps = Math.max(...validSets
+          .filter(s => parseFloat(s.w) === topWeight)
+          .map(s => parseInt(s.r) || 0));
+        const summary = validSets.map(s => `${s.w}×${s.r}`).join(', ');
+
+        // PR check: compare new effort against history *excluding* same-day entries.
+        // PR = higher weight, OR same weight at higher reps.
+        const prevHistory = data.history.filter(h => h.iso !== isoDate);
+        let prevBest = null;
+        prevHistory.forEach(h => {
+          if (h.topWeight === undefined) return;
+          if (!prevBest) { prevBest = h; return; }
+          if (h.topWeight > prevBest.topWeight ||
+             (h.topWeight === prevBest.topWeight && (h.topReps || 0) > (prevBest.topReps || 0))) {
+            prevBest = h;
+          }
+        });
+
+        const isPR = !prevBest ||
+                     topWeight > prevBest.topWeight ||
+                     (topWeight === prevBest.topWeight && topReps > (prevBest.topReps || 0));
+
+        if (isPR && topReps > 0) {
+          newPRs.push({
+            name: ex.name,
+            weight: topWeight,
+            reps: topReps,
+            prev: prevBest ? { weight: prevBest.topWeight, reps: prevBest.topReps || 0 } : null
+          });
+        }
+
+        // Remove any existing same-day entry, then add new
+        data.history = data.history.filter(h => h.iso !== isoDate);
+        data.history.push({ date: dateStr, iso: isoDate, summary, topWeight, topReps });
+        if (data.history.length > 60) data.history = data.history.slice(-60);
+
+        // Reset tickers only — keep weight + reps for continuity
+        data.sets.forEach(s => { s.d = false; });
+        savedCount++;
+      }
+    });
+
+    if (savedCount === 0) {
+      showToast('Log some sets first');
+      return;
+    }
+
+    saveState();
+    renderContent();
+    showToast(`Saved ${savedCount}`);
+
+    // Show PR popup after a brief delay so the toast doesn't compete
+    if (newPRs.length > 0) {
+      setTimeout(() => showPRPopup(newPRs), 400);
+    }
+  }
+
+  function pickDefaultDay() {
+    const today = new Date().getDay(); // 0 = Sun, 1 = Mon, ...
+    const dayLabels = { 0: 'SUN', 1: 'MON', 2: 'TUE', 3: 'WED', 4: 'THU', 5: 'FRI', 6: 'SAT' };
+    const todayLabel = dayLabels[today];
+    if (state.workouts) {
+      // Find the workout currently assigned to today's weekday
+      const match = Object.entries(state.workouts).find(([k, w]) => w.day === todayLabel);
+      if (match) return match[0];
+      // Fallback: first available
+      const keys = Object.keys(state.workouts);
+      if (keys.length > 0) return keys[0];
+    }
+    return 'push';
+  }
+
+  // ============ EXPORT / IMPORT ============
+  function openExport() {
+    const text = JSON.stringify(state);
+    document.getElementById('exportText').value = text;
+    document.getElementById('exportModal').classList.add('show');
+  }
+
+  function openImport() {
+    document.getElementById('importText').value = '';
+    document.getElementById('importModal').classList.add('show');
+  }
+
+  function closeModal(id) {
+    document.getElementById(id).classList.remove('show');
+  }
+
+  function copyExport() {
+    const textarea = document.getElementById('exportText');
+    textarea.select();
+    textarea.setSelectionRange(0, 999999);
+    try {
+      document.execCommand('copy');
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(textarea.value).catch(() => {});
+      }
+      showToast('Copied');
+    } catch (e) {
+      showToast('Select & copy manually');
+    }
+  }
+
+  async function doImport() {
+    const text = document.getElementById('importText').value.trim();
+    if (!text) {
+      showToast('Paste data first');
+      return;
+    }
+    let imported;
+    try {
+      const parsed = JSON.parse(text);
+      if (typeof parsed !== 'object' || parsed === null) throw new Error('Invalid format');
+
+      // v2 format
+      if (parsed.workouts && parsed.exerciseData) {
+        imported = parsed;
+        if (!imported.workouts) imported.workouts = deepClone(DEFAULT_WORKOUTS);
+        if (!imported.exerciseData) imported.exerciseData = {};
+        if (typeof imported.acknowledged !== 'boolean') imported.acknowledged = false;
+        if (!imported.currentTab) imported.currentTab = 'info';
+        if (typeof imported.timerEnabled !== 'boolean') imported.timerEnabled = true;
+        if (typeof imported.timerDuration !== 'number') imported.timerDuration = 90;
+      } else {
+        // Looks like v1 (flat exercise-keyed object)
+        imported = migrateV1(parsed);
+      }
+    } catch (e) {
+      await customAlert('Invalid backup data. Make sure you copied the entire text from Export.', 'IMPORT FAILED');
+      return;
+    }
+
+    const ok = await customConfirm('This will replace your current data. Continue?', 'IMPORT DATA');
+    if (!ok) return;
+    state = imported;
+    saveState();
+    closeModal('importModal');
+    renderTopTabs();
+    renderContent();
+    showToast('Restored');
+  }
+
+  // ============ ACKNOWLEDGMENT ============
+  function showAck() {
+    document.getElementById('ackModal').classList.add('show');
+  }
+
+  // Keep PROCEED button enabled state in sync with the checkbox
+  document.addEventListener('change', (e) => {
+    if (e.target && e.target.id === 'ackCheck') {
+      document.getElementById('ackProceed').classList.toggle('disabled', !e.target.checked);
+    }
+  });
+
+  function completeAck() {
+    const cb = document.getElementById('ackCheck');
+    if (!cb.checked) return;
+    state.acknowledged = true;
+    saveState();
+    document.getElementById('ackModal').classList.remove('show');
+  }
+
+  // ============ MISC ============
+  function showToast(msg) {
+    const toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 1800);
+  }
+
+  // Custom confirm modal — replaces native confirm() which can fail in some
+  // environments (artifacts, installed PWAs). Returns a Promise<boolean>.
+  function customConfirm(message, title) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById('confirmModal');
+      const titleEl = document.getElementById('confirmTitle');
+      const bodyEl = document.getElementById('confirmBody');
+      const okBtn = document.getElementById('confirmOkBtn');
+      const cancelBtn = document.getElementById('confirmCancelBtn');
+
+      titleEl.textContent = title || 'CONFIRM';
+      bodyEl.textContent = message;
+
+      const cleanup = (result) => {
+        modal.classList.remove('show');
+        okBtn.removeEventListener('click', okHandler);
+        cancelBtn.removeEventListener('click', cancelHandler);
+        resolve(result);
+      };
+      const okHandler = () => cleanup(true);
+      const cancelHandler = () => cleanup(false);
+
+      okBtn.addEventListener('click', okHandler);
+      cancelBtn.addEventListener('click', cancelHandler);
+      modal.classList.add('show');
+    });
+  }
+
+  // Used in place of alert() — same modal but with only one button
+  function customAlert(message, title) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById('confirmModal');
+      const titleEl = document.getElementById('confirmTitle');
+      const bodyEl = document.getElementById('confirmBody');
+      const okBtn = document.getElementById('confirmOkBtn');
+      const cancelBtn = document.getElementById('confirmCancelBtn');
+
+      titleEl.textContent = title || 'NOTICE';
+      bodyEl.textContent = message;
+      cancelBtn.style.display = 'none';
+      okBtn.textContent = 'OK';
+
+      const cleanup = () => {
+        modal.classList.remove('show');
+        okBtn.removeEventListener('click', okHandler);
+        // Restore for next confirm use
+        cancelBtn.style.display = '';
+        okBtn.textContent = 'CONFIRM';
+        resolve();
+      };
+      const okHandler = () => cleanup();
+
+      okBtn.addEventListener('click', okHandler);
+      modal.classList.add('show');
+    });
+  }
+
+  function setCurrentDate() {
+    const today = new Date();
+    const days = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+    const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    document.getElementById('currentDate').textContent =
+      `${days[today.getDay()]} · ${today.getDate()} ${months[today.getMonth()]}`;
+  }
+
+  // ============ REST TIMER ============
+  let timerInterval = null;
+
+  function formatTime(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+  }
+
+  function startRestTimer(durationSec) {
+    const popup = document.getElementById('timerPopup');
+    const valueEl = document.getElementById('timerValue');
+    if (!popup || !valueEl) return;
+
+    // Clear any running timer
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+
+    let remaining = durationSec;
+    valueEl.textContent = formatTime(remaining);
+    valueEl.classList.remove('done');
+    popup.classList.add('show');
+
+    timerInterval = setInterval(() => {
+      remaining--;
+      if (remaining <= 0) {
+        valueEl.textContent = '00:00';
+        valueEl.classList.add('done');
+        clearInterval(timerInterval);
+        timerInterval = null;
+        // Auto-hide after 3 sec when done, but only if still showing
+        setTimeout(() => {
+          if (popup.classList.contains('show') && valueEl.classList.contains('done')) {
+            popup.classList.remove('show');
+          }
+        }, 3000);
+        return;
+      }
+      valueEl.textContent = formatTime(remaining);
+    }, 1000);
+  }
+
+  function dismissTimer() {
+    const popup = document.getElementById('timerPopup');
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+    if (popup) popup.classList.remove('show');
+  }
+
+  // Wire up dismiss button once
+  document.addEventListener('DOMContentLoaded', () => {});
+  // (We attach below after init since the element exists from the start)
+
+  // ============ PR POPUP ============
+  function showPRPopup(prs) {
+    const popup = document.getElementById('prPopup');
+    const list = document.getElementById('prList');
+    if (!popup || !list) return;
+
+    list.innerHTML = prs.map(pr => {
+      const prevText = pr.prev
+        ? `Previous: ${pr.prev.weight}${pr.prev.reps ? ' × ' + pr.prev.reps : ' lb'}`
+        : 'First entry';
+      return `
+        <div class="pr-entry">
+          <div class="pr-entry-name">${escapeHtml(pr.name)}</div>
+          <div class="pr-entry-detail">${pr.weight} × ${pr.reps}</div>
+          <div class="pr-entry-prev">${prevText}</div>
+        </div>
+      `;
+    }).join('');
+
+    popup.classList.add('show');
+  }
+
+  function dismissPR() {
+    const popup = document.getElementById('prPopup');
+    if (popup) popup.classList.remove('show');
+  }
+
+  // Close autocomplete when clicking outside
+  document.addEventListener('click', (e) => {
+    if (activeAutocomplete && !e.target.closest('.autocomplete-list') && !e.target.closest('.inline-edit')) {
+      closeAutocomplete();
+    }
+  });
+
+  // ============ INIT ============
+  function init() {
+    setCurrentDate();
+    loadState();
+    if (!storageWorks) {
+      updateSaveIndicator('warning', '⚠ Storage unavailable — export to backup');
+    }
+    if (!state.currentDay) state.currentDay = pickDefaultDay();
+    if (!state.currentTab) state.currentTab = 'info';
+    renderTopTabs();
+    renderContent();
+
+    // Wire up popup dismiss buttons (elements exist from page load)
+    const tDismiss = document.getElementById('timerDismissBtn');
+    if (tDismiss) tDismiss.addEventListener('click', dismissTimer);
+    const prDismiss = document.getElementById('prDismissBtn');
+    if (prDismiss) prDismiss.addEventListener('click', dismissPR);
+
+    // Show acknowledgment modal if first time
+    if (!state.acknowledged) {
+      // Force tab to info on first launch
+      state.currentTab = 'info';
+      renderTopTabs();
+      renderContent();
+      setTimeout(showAck, 300);
+    }
+  }
+
+  init();
+</script>
+
+</body>
+</html>
