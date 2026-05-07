@@ -513,10 +513,31 @@
     justify-content: space-between;
     padding: 4px 0;
     gap: 8px;
+    align-items: center;
   }
 
   .history-entry .date-col { color: var(--text-faint); flex-shrink: 0; }
-  .history-entry .summary-col { text-align: right; word-break: break-word; }
+  .history-entry .summary-col { flex: 1; text-align: right; word-break: break-word; }
+
+  /* Per-entry delete button. Subtle by default, danger-red on hover. */
+  .history-del {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-faint);
+    padding: 2px 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    flex-shrink: 0;
+    border-radius: 0;
+  }
+
+  .history-del:hover {
+    border-color: #ff4444;
+    color: #ff4444;
+  }
 
   /* Day-level finish button */
   .finish-day {
@@ -1819,7 +1840,7 @@
       },
       save_day: {
         title: 'SAVE DAY BEHAVIOR',
-        body: `<p>One history entry per exercise per calendar day. Re-saving the same day overwrites that day's entry.</p><p><strong>LAST TOP</strong> shows your highest weight × reps. A <strong>NEW PR</strong> popup fires when you beat your previous best (more weight, or same weight at higher reps).</p>`
+        body: `<p>One history entry per exercise per ISO week. Re-saving in the same week — even across midnight — updates that week's entry instead of spawning a duplicate. Newer week = new entry.</p><p><strong>LAST TOP</strong> shows your highest weight × reps (or top hold time / top reps for time and bodyweight modes). A <strong>NEW PR</strong> popup fires when you beat your previous best.</p><p>Each row in the history list has a small <strong>DEL</strong> button. Tap it to permanently remove that single entry — useful for cleaning up bad saves.</p>`
       },
       reorder: {
         title: 'REORDERING WORKOUT DAYS',
@@ -1846,7 +1867,9 @@
           'Long-press an exercise name or target to edit it (instead of double-click). One steady press, no awkward double-tap on mobile.',
           'Picking a library suggestion now also resets that exercise\'s set rows to the right shape — no leftover weight/reps lingering when you switch a card to a hold or bodyweight movement.',
           'Default Plank and Hanging Knee Raise on Saturday\'s Abs day now use the right input style automatically (seconds for the plank, reps-only for the knee raise).',
-          'Tag-based suggestions now actually show up. Typing "tricep" used to fill the dropdown with only the explicitly-named "Tricep ___" lifts, hiding Skull Crushers, Close-Grip Bench, Dips, etc. The dropdown now mixes name matches with tag matches so category words surface the cross-cutting lifts too.'
+          'Tag-based suggestions now actually show up. Typing "tricep" used to fill the dropdown with only the explicitly-named "Tricep ___" lifts, hiding Skull Crushers, Close-Grip Bench, Dips, etc. The dropdown now mixes name matches with tag matches so category words surface the cross-cutting lifts too.',
+          'Save Day no longer creates a duplicate entry when you re-save across midnight. If a workout already has a history row this ISO week, Save Day updates that row instead of spawning a new one — so editing yesterday\'s session today updates yesterday, not today.',
+          'Each history row now has a small DEL button. Tap it to permanently remove that single entry (after a confirmation prompt). Use it to clean up bad rows without wiping the whole exercise.'
         ]
       },
       {
@@ -2238,6 +2261,7 @@
             <div class="history-entry">
               <span class="date-col">${h.date}</span>
               <span class="summary-col">${h.summary}</span>
+              <button class="history-del" data-action="delete-history" data-iso="${escapeHtml(h.iso || '')}" title="Delete this entry">DEL</button>
             </div>
           `).join('')
         : '<div class="history-entry"><span>No history yet.</span></div>';
@@ -2352,6 +2376,7 @@
           <div class="history-entry">
             <span class="date-col">${h.date}</span>
             <span class="summary-col">${h.summary}</span>
+            <button class="history-del" data-action="delete-history" data-iso="${escapeHtml(h.iso || '')}" title="Delete this entry">DEL</button>
           </div>
         `).join('')
       : '<div class="history-entry"><span>No history yet.</span></div>';
@@ -2444,6 +2469,41 @@
         const history = btn.parentElement.querySelector('.history');
         history.classList.toggle('show');
         btn.textContent = history.classList.contains('show') ? 'Hide History' : 'View History';
+      });
+    });
+
+    // Delete a single history entry. Confirms first, then splices it out.
+    // Re-renders the day view, then re-expands and re-opens the history of the
+    // affected exercise so the user can keep working.
+    document.querySelectorAll('[data-action="delete-history"]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const exerciseEl = btn.closest('.exercise');
+        const exerciseId = exerciseEl.dataset.exercise;
+        const iso = btn.dataset.iso;
+        const data = state.exerciseData && state.exerciseData[exerciseId];
+        if (!data || !Array.isArray(data.history)) return;
+        const entry = data.history.find(h => h.iso === iso);
+        if (!entry) return;
+        const ok = await customConfirm(
+          `Delete the ${entry.date || iso} entry for this exercise? This cannot be undone.`,
+          'DELETE HISTORY ENTRY'
+        );
+        if (!ok) return;
+        data.history = data.history.filter(h => h.iso !== iso);
+        saveState();
+        renderContent();
+        // Re-expand the same exercise and re-open its history list so the user
+        // can delete more entries without re-navigating.
+        const card = document.querySelector(`.exercise[data-exercise="${exerciseId}"]`);
+        if (card) {
+          card.classList.add('expanded');
+          const hist = card.querySelector('.history');
+          if (hist) hist.classList.add('show');
+          const toggle = card.querySelector('[data-action="toggle-history"]');
+          if (toggle) toggle.textContent = 'Hide History';
+        }
+        showToast('Entry deleted');
       });
     });
 
@@ -2848,8 +2908,51 @@
   }
 
   // ============ FINISH DAY ============
-  // Commits all exercises in the current day to history. Same-day re-saves overwrite.
-  // Resets the "done" tickers but keeps weight + reps for continuity.
+  // Returns an ISO-8601 week key like "2026-W19". Accepts a YYYY-MM-DD string
+  // or a Date instance; either way the date is treated as a calendar day, no
+  // timezone surprises.
+  function getISOWeekKey(input) {
+    let d;
+    if (typeof input === 'string') {
+      const [y, m, day] = input.split('-').map(Number);
+      d = new Date(Date.UTC(y, m - 1, day));
+    } else {
+      d = new Date(Date.UTC(input.getFullYear(), input.getMonth(), input.getDate()));
+    }
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const weekNum = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+    return `${d.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+  }
+
+  // Decide which ISO date Save Day should write under. Logic: if any exercise
+  // in this workout already has a history entry in the current ISO week, target
+  // that most-recent same-week entry (an edit, not a fresh session). Otherwise
+  // target today. Lets cross-midnight edits update yesterday's record instead
+  // of spawning a duplicate today row.
+  function getSaveTargetIso(workout) {
+    const today = new Date();
+    const isoToday = today.toISOString().slice(0, 10);
+    const currentWeek = getISOWeekKey(today);
+    let bestIso = null;
+    if (workout && Array.isArray(workout.exercises)) {
+      for (const ex of workout.exercises) {
+        const data = state.exerciseData && state.exerciseData[ex.id];
+        if (!data || !Array.isArray(data.history)) continue;
+        for (const entry of data.history) {
+          if (!entry.iso) continue;
+          if (getISOWeekKey(entry.iso) !== currentWeek) continue;
+          if (!bestIso || entry.iso > bestIso) bestIso = entry.iso;
+        }
+      }
+    }
+    return bestIso || isoToday;
+  }
+
+  // Commits all exercises in the current day to history. Same-week re-saves
+  // overwrite that week's entry. Resets the "done" tickers but keeps weight +
+  // reps for continuity.
   function finishDay() {
     const workout = state.workouts[state.currentDay];
     if (!workout || !workout.exercises) {
@@ -2857,9 +2960,9 @@
       return;
     }
 
-    const today = new Date();
-    const dateStr = `${(today.getMonth()+1).toString().padStart(2,'0')}/${today.getDate().toString().padStart(2,'0')}/${today.getFullYear().toString().slice(-2)}`;
-    const isoDate = today.toISOString().slice(0, 10); // YYYY-MM-DD for matching same-day
+    const isoDate = getSaveTargetIso(workout);
+    const targetDate = new Date(isoDate + 'T00:00:00');
+    const dateStr = `${(targetDate.getMonth()+1).toString().padStart(2,'0')}/${targetDate.getDate().toString().padStart(2,'0')}/${targetDate.getFullYear().toString().slice(-2)}`;
 
     let savedCount = 0;
     const newPRs = [];
