@@ -1868,7 +1868,7 @@
           'Picking a library suggestion now also resets that exercise\'s set rows to the right shape — no leftover weight/reps lingering when you switch a card to a hold or bodyweight movement.',
           'Default Plank and Hanging Knee Raise on Saturday\'s Abs day now use the right input style automatically (seconds for the plank, reps-only for the knee raise).',
           'Tag-based suggestions now actually show up. Typing "tricep" used to fill the dropdown with only the explicitly-named "Tricep ___" lifts, hiding Skull Crushers, Close-Grip Bench, Dips, etc. The dropdown now mixes name matches with tag matches so category words surface the cross-cutting lifts too.',
-          'Save Day no longer creates a duplicate entry when you re-save across midnight. If a workout already has a history row this ISO week, Save Day updates that row instead of spawning a new one — so editing yesterday\'s session today updates yesterday, not today.',
+          'Save Day enforces one history row per workout per ISO week. The first save of the week sets that week\'s date — every later save in the same week (even across midnight) updates that one row, dated to the original save. Any duplicate same-week rows from older builds collapse into the canonical one on the next Save Day.',
           'Each history row now has a small DEL button. Tap it to permanently remove that single entry (after a confirmation prompt). Use it to clean up bad rows without wiping the whole exercise.'
         ]
       },
@@ -2926,11 +2926,11 @@
     return `${d.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`;
   }
 
-  // Decide which ISO date Save Day should write under. Logic: if any exercise
-  // in this workout already has a history entry in the current ISO week, target
-  // that most-recent same-week entry (an edit, not a fresh session). Otherwise
-  // target today. Lets cross-midnight edits update yesterday's record instead
-  // of spawning a duplicate today row.
+  // Decide which ISO date Save Day should write under. Rule: one history row
+  // per workout per ISO week. If this workout already has same-week entries,
+  // target the OLDEST one — that's the canonical "first save this week" date,
+  // and any newer same-week entries are duplicates that should collapse into
+  // it (see finishDay). If no same-week entries exist, target today.
   function getSaveTargetIso(workout) {
     const today = new Date();
     const isoToday = today.toISOString().slice(0, 10);
@@ -2943,7 +2943,7 @@
         for (const entry of data.history) {
           if (!entry.iso) continue;
           if (getISOWeekKey(entry.iso) !== currentWeek) continue;
-          if (!bestIso || entry.iso > bestIso) bestIso = entry.iso;
+          if (!bestIso || entry.iso < bestIso) bestIso = entry.iso;
         }
       }
     }
@@ -2961,8 +2961,15 @@
     }
 
     const isoDate = getSaveTargetIso(workout);
+    const currentWeek = getISOWeekKey(isoDate);
     const targetDate = new Date(isoDate + 'T00:00:00');
     const dateStr = `${(targetDate.getMonth()+1).toString().padStart(2,'0')}/${targetDate.getDate().toString().padStart(2,'0')}/${targetDate.getFullYear().toString().slice(-2)}`;
+
+    // Drops every history entry that falls inside the current ISO week. Used
+    // before pushing the new save so any legacy duplicates from older builds
+    // collapse into the single canonical entry for this week.
+    const dropSameWeek = (history) =>
+      history.filter(h => !h.iso || getISOWeekKey(h.iso) !== currentWeek);
 
     let savedCount = 0;
     const newPRs = [];
@@ -2977,7 +2984,7 @@
             data.cardio.time ? `${data.cardio.time}min` : null,
             data.cardio.distance ? `${data.cardio.distance}mi` : null
           ].filter(Boolean).join(' / ');
-          data.history = data.history.filter(h => h.iso !== isoDate);
+          data.history = dropSameWeek(data.history);
           data.history.push({ date: dateStr, iso: isoDate, summary });
           if (data.history.length > 60) data.history = data.history.slice(-60);
           savedCount++;
@@ -2993,9 +3000,10 @@
         const topTime = Math.max(...validSets.map(s => parseFloat(s.t) || 0));
         const summary = validSets.map(s => `${s.t}s`).join(', ');
 
-        const prevHistory = data.history.filter(h => h.iso !== isoDate);
+        // Collapse same-week first; PR check then runs against truly older history.
+        data.history = dropSameWeek(data.history);
         let prevBest = null;
-        prevHistory.forEach(h => {
+        data.history.forEach(h => {
           if (h.topTime === undefined) return;
           if (!prevBest || h.topTime > prevBest.topTime) prevBest = h;
         });
@@ -3004,7 +3012,6 @@
           newPRs.push({ name: ex.name, time: topTime, prev: prevBest ? { time: prevBest.topTime } : null });
         }
 
-        data.history = data.history.filter(h => h.iso !== isoDate);
         data.history.push({ date: dateStr, iso: isoDate, summary, topTime });
         if (data.history.length > 60) data.history = data.history.slice(-60);
         data.sets.forEach(s => { s.d = false; });
@@ -3018,9 +3025,9 @@
         const topReps = Math.max(...validSets.map(s => parseInt(s.r) || 0));
         const summary = validSets.map(s => `${s.r}`).join(', ');
 
-        const prevHistory = data.history.filter(h => h.iso !== isoDate);
+        data.history = dropSameWeek(data.history);
         let prevBest = null;
-        prevHistory.forEach(h => {
+        data.history.forEach(h => {
           if (h.topReps === undefined || h.topWeight !== undefined) return;
           if (!prevBest || h.topReps > prevBest.topReps) prevBest = h;
         });
@@ -3029,7 +3036,6 @@
           newPRs.push({ name: ex.name, reps: topReps, prev: prevBest ? { reps: prevBest.topReps || 0 } : null });
         }
 
-        data.history = data.history.filter(h => h.iso !== isoDate);
         data.history.push({ date: dateStr, iso: isoDate, summary, topReps });
         if (data.history.length > 60) data.history = data.history.slice(-60);
         data.sets.forEach(s => { s.d = false; });
@@ -3048,11 +3054,11 @@
         .map(s => parseInt(s.r) || 0));
       const summary = validSets.map(s => `${s.w}×${s.r}`).join(', ');
 
-      // PR check: compare new effort against history *excluding* same-day entries.
+      // Collapse same-week first; PR check then runs against truly older history.
       // PR = higher weight, OR same weight at higher reps.
-      const prevHistory = data.history.filter(h => h.iso !== isoDate);
+      data.history = dropSameWeek(data.history);
       let prevBest = null;
-      prevHistory.forEach(h => {
+      data.history.forEach(h => {
         if (h.topWeight === undefined) return;
         if (!prevBest) { prevBest = h; return; }
         if (h.topWeight > prevBest.topWeight ||
@@ -3074,8 +3080,6 @@
         });
       }
 
-      // Remove any existing same-day entry, then add new
-      data.history = data.history.filter(h => h.iso !== isoDate);
       data.history.push({ date: dateStr, iso: isoDate, summary, topWeight, topReps });
       if (data.history.length > 60) data.history = data.history.slice(-60);
 
