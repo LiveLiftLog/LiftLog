@@ -378,6 +378,33 @@
     text-align: right;
   }
 
+  /* Completion badge: shown on the parent exercise row when every set in
+     that exercise is checked off. Hidden by default; the .complete class on
+     the parent .exercise toggles visibility. Lives in .exercise-header so it
+     stays visible whether the card is collapsed or expanded. */
+  .completion-badge {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin-left: 10px;
+    flex-shrink: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(255, 87, 34, 0.35);
+  }
+
+  .completion-badge img {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: block;
+    pointer-events: none;
+  }
+
+  .exercise.complete .completion-badge { display: flex; }
+
   .last-weight .label {
     display: block;
     font-size: 9px;
@@ -2505,12 +2532,16 @@
         `).join('')
       : '<div class="history-entry"><span>No history yet.</span></div>';
 
+    const allSetsDone = data.sets.length > 0 && data.sets.every(s => s.d);
     return `
-      <div class="exercise" data-exercise="${ex.id}" data-idx="${idx}" data-mode="${mode}">
+      <div class="exercise${allSetsDone ? ' complete' : ''}" data-exercise="${ex.id}" data-idx="${idx}" data-mode="${mode}">
         <div class="exercise-header">
           <div class="exercise-info">
             <div class="exercise-name" data-edit-name>${escapeHtml(ex.name)}</div>
             <div class="exercise-target" data-edit-target>${escapeHtml(ex.target)}</div>
+          </div>
+          <div class="completion-badge" aria-label="All sets complete">
+            <img src="/icon-192.png" alt="">
           </div>
           <div class="last-weight">
             <span class="label">${lastLabel}</span>
@@ -3007,6 +3038,14 @@
     data.sets[setIdx].d = !wasChecked;
     e.target.classList.toggle('done');
     e.target.textContent = data.sets[setIdx].d ? '✓' : '○';
+    // Reflect overall completion on the parent exercise row so the badge
+    // appears the moment the last set is checked, and disappears the moment
+    // any set is unchecked. No re-render needed.
+    const exerciseEl = e.target.closest('.exercise');
+    if (exerciseEl) {
+      const allDone = data.sets.length > 0 && data.sets.every(s => s.d);
+      exerciseEl.classList.toggle('complete', allDone);
+    }
     saveState();
     // Start rest timer only when checking ON, not when unchecking
     if (!wasChecked && state.timerEnabled) {
