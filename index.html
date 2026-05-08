@@ -2005,7 +2005,8 @@
           'Tag-based suggestions now actually show up. Typing "tricep" used to fill the dropdown with only the explicitly-named "Tricep ___" lifts, hiding Skull Crushers, Close-Grip Bench, Dips, etc. The dropdown now mixes name matches with tag matches so category words surface the cross-cutting lifts too.',
           'Save Day enforces one history row per workout per ISO week. The first save of the week sets that week\'s date — every later save in the same week (even across midnight) updates that one row, dated to the original save. Any duplicate same-week rows from older builds collapse into the canonical one on the next Save Day.',
           'Each history row now has a small DEL button. Tap it to permanently remove that single entry (after a confirmation prompt). Use it to clean up bad rows without wiping the whole exercise.',
-          'The current-day row in the top tabs now doubles as a day picker. From any other tab, tapping it jumps to that day\'s view (no extra dropdown shown). Once you\'re on the day view, small carets appear flanking the row on both sides — tap again and it expands inline into all 7 days as full-width orange rows in the same Bebas Neue style. Picking one switches the day and collapses the list. The separate dropdown that used to sit at the top of the day view is gone — this row replaces it.'
+          'The current-day row in the top tabs now doubles as a day picker. From any other tab, tapping it jumps to that day\'s view (no extra dropdown shown). Once you\'re on the day view, small carets appear flanking the row on both sides — tap again and it expands inline into all 7 days as full-width orange rows in the same Bebas Neue style. Picking one switches the day and collapses the list. The separate dropdown that used to sit at the top of the day view is gone — this row replaces it.',
+          'Save Day now stamps history entries with your LOCAL calendar date instead of the UTC date. Previously a save late on Sunday evening could land on Monday\'s row because UTC had already rolled over. New saves classify the ISO week from your local clock so the weekly rollover lines up with midnight in your time zone. Existing history entries are untouched — only future saves use the new rule.'
         ]
       },
       {
@@ -3023,6 +3024,18 @@
   }
 
   // ============ FINISH DAY ============
+  // Returns the user's LOCAL calendar date as a YYYY-MM-DD string. We avoid
+  // toISOString() here because that returns UTC, which can flip to the next
+  // calendar day in the evening for users west of UTC and silently push their
+  // save into the wrong ISO week.
+  function localIsoDate(date) {
+    const d = date || new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
   // Returns an ISO-8601 week key like "2026-W19". Accepts a YYYY-MM-DD string
   // or a Date instance; either way the date is treated as a calendar day, no
   // timezone surprises.
@@ -3048,8 +3061,8 @@
   // it (see finishDay). If no same-week entries exist, target today.
   function getSaveTargetIso(workout) {
     const today = new Date();
-    const isoToday = today.toISOString().slice(0, 10);
-    const currentWeek = getISOWeekKey(today);
+    const isoToday = localIsoDate(today);
+    const currentWeek = getISOWeekKey(isoToday);
     let bestIso = null;
     if (workout && Array.isArray(workout.exercises)) {
       for (const ex of workout.exercises) {
