@@ -2023,7 +2023,8 @@
         date: '2026-05-08',
         changes: [
           'Workouts now show a small orange completion badge on the parent row of an exercise once every set in that exercise has been ticked, so a finished exercise is recognizable at a glance without expanding the row. Unchecking any set hides the badge again. Cardio exercises are unaffected.',
-          'Pulled that completion badge a bit further left so it no longer crowds the LAST TOP value on the right side of the row.'
+          'Pulled that completion badge a bit further left so it no longer crowds the LAST TOP value on the right side of the row.',
+          'Cardio exercises now get the same completion badge on their parent row, contingent on both Time (min) and Distance (mi) being filled in. Clearing either field hides the badge again.'
         ]
       },
       {
@@ -2425,12 +2426,16 @@
           `).join('')
         : '<div class="history-entry"><span>No history yet.</span></div>';
 
+      const cardioComplete = String(data.cardio.time || '').trim() !== '' && String(data.cardio.distance || '').trim() !== '';
       return `
-        <div class="exercise" data-exercise="${ex.id}" data-idx="${idx}" data-mode="cardio">
+        <div class="exercise${cardioComplete ? ' complete' : ''}" data-exercise="${ex.id}" data-idx="${idx}" data-mode="cardio">
           <div class="exercise-header">
             <div class="exercise-info">
               <div class="exercise-name" data-edit-name>${escapeHtml(ex.name)}</div>
               <div class="exercise-target" data-edit-target>${escapeHtml(ex.target || 'time + distance')}</div>
+            </div>
+            <div class="completion-badge" aria-label="Cardio complete">
+              <img src="/icon-192.png" alt="">
             </div>
             <div class="last-weight">
               <span class="label">Last</span>
@@ -2611,10 +2616,16 @@
       btn.addEventListener('click', handleSetDone);
     });
 
-    // Cardio inputs
+    // Cardio inputs. 'change'/'blur' persist the value (matches the set-input
+    // convention — save on commit, not per keystroke). 'input' is bound for
+    // the badge update only so the completion badge appears/disappears live
+    // as the user types both fields, without saving on every keystroke.
     document.querySelectorAll('[data-cardio-field]').forEach(input => {
       input.addEventListener('change', handleCardioChange);
       input.addEventListener('blur', handleCardioChange);
+      input.addEventListener('input', (e) => {
+        updateCardioCompletion(e.target.closest('.exercise'));
+      });
     });
 
     // History toggles
@@ -3067,7 +3078,20 @@
     const field = e.target.dataset.cardioField;
     const data = getCardioData(exerciseId);
     data.cardio[field] = e.target.value;
+    updateCardioCompletion(exerciseEl);
     saveState();
+  }
+
+  // Cardio's analogue to the set-based completion check. The orange badge
+  // shows on the parent row once both Time (min) and Distance (mi) are
+  // filled; clearing either hides it again. Reads from the live inputs so
+  // it works during 'input' events before state has been written.
+  function updateCardioCompletion(exerciseEl) {
+    if (!exerciseEl) return;
+    const inputs = exerciseEl.querySelectorAll('[data-cardio-field]');
+    if (!inputs.length) return;
+    const allFilled = Array.from(inputs).every(i => String(i.value).trim() !== '');
+    exerciseEl.classList.toggle('complete', allFilled);
   }
 
   // ============ FINISH DAY ============
