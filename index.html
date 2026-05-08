@@ -376,11 +376,6 @@
     margin-left: 12px;
     flex-shrink: 0;
     text-align: right;
-    /* Fixed minimum width so the column lines up across cards regardless
-       of label ("LAST TOP" vs "LAST") or value width. Without this the
-       cardio badge sat further right than the set-based ones because the
-       cardio header's natural .last-weight was ~25px narrower. */
-    min-width: 60px;
   }
 
   /* Completion badge: shown on the parent exercise row when every set in
@@ -541,11 +536,14 @@
     color: var(--bg);
   }
 
-  /* Cardio row layout (different from regular sets) */
+  /* Cardio row layout: Time field on the left, tick button on the right.
+     Mirrors set-based row visual rhythm — single Time field instead of a
+     set list, but the tick column is the same 50px as .set-row's. */
   .cardio-fields {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 50px;
     gap: 10px;
+    align-items: end;
     margin-bottom: 8px;
   }
 
@@ -1850,12 +1848,18 @@
   function getCardioData(exerciseId) {
     if (!state.exerciseData[exerciseId]) {
       state.exerciseData[exerciseId] = {
-        cardio: { time: '', distance: '' },
+        cardio: { time: '', distance: '', done: false },
         history: []
       };
     }
     if (!state.exerciseData[exerciseId].cardio) {
-      state.exerciseData[exerciseId].cardio = { time: '', distance: '' };
+      state.exerciseData[exerciseId].cardio = { time: '', distance: '', done: false };
+    }
+    // Backfill the done flag for cardio rows persisted before the tick
+    // box was introduced. Distance is left in place — old data stays
+    // readable, it's just no longer surfaced or edited in the UI.
+    if (state.exerciseData[exerciseId].cardio.done === undefined) {
+      state.exerciseData[exerciseId].cardio.done = false;
     }
     if (!state.exerciseData[exerciseId].history) {
       state.exerciseData[exerciseId].history = [];
@@ -2030,7 +2034,8 @@
           'Workouts now show a small orange completion badge on the parent row of an exercise once every set in that exercise has been ticked, so a finished exercise is recognizable at a glance without expanding the row. Unchecking any set hides the badge again.',
           'Pulled that completion badge a bit further left so it no longer crowds the LAST TOP value on the right side of the row.',
           'Cardio exercises now get the same completion badge on their parent row, contingent on both Time (min) and Distance (mi) being filled in. Clearing either field hides the badge again.',
-          'The cardio completion badge now lines up with the set-based ones across the workout list — the cardio row\'s Last column was narrower than the set-based rows\' Last Top column, which pushed its badge further right.'
+          'The cardio completion badge now lines up with the set-based ones across the workout list — the cardio row\'s Last column was narrower than the set-based rows\' Last Top column, which pushed its badge further right.',
+          'Cardio rows have been reworked to mirror the rest of the workout: the Distance field is gone, Time gets its own tick box, and the LAST TOP column shows the most recent time you logged. The completion badge now follows that tick the same way set-based badges follow their set ticks, so saving the day clears the badge.'
         ]
       },
       {
@@ -2420,7 +2425,9 @@
     if (mode === 'cardio') {
       const data = getCardioData(ex.id);
       const lastEntry = data.history[data.history.length - 1];
-      const lastSummary = lastEntry ? `${lastEntry.summary}` : '—';
+      const lastSummary = (lastEntry && lastEntry.topTime !== undefined)
+        ? `${lastEntry.topTime}m`
+        : '—';
 
       const historyHtml = data.history.length > 0
         ? data.history.slice(-5).reverse().map(h => `
@@ -2432,19 +2439,19 @@
           `).join('')
         : '<div class="history-entry"><span>No history yet.</span></div>';
 
-      const cardioComplete = String(data.cardio.time || '').trim() !== '' && String(data.cardio.distance || '').trim() !== '';
+      const cardioDone = !!data.cardio.done;
       return `
-        <div class="exercise${cardioComplete ? ' complete' : ''}" data-exercise="${ex.id}" data-idx="${idx}" data-mode="cardio">
+        <div class="exercise${cardioDone ? ' complete' : ''}" data-exercise="${ex.id}" data-idx="${idx}" data-mode="cardio">
           <div class="exercise-header">
             <div class="exercise-info">
               <div class="exercise-name" data-edit-name>${escapeHtml(ex.name)}</div>
-              <div class="exercise-target" data-edit-target>${escapeHtml(ex.target || 'time + distance')}</div>
+              <div class="exercise-target" data-edit-target>${escapeHtml(ex.target || 'time')}</div>
             </div>
             <div class="completion-badge" aria-label="Cardio complete">
               <img src="/icon-192.png" alt="">
             </div>
             <div class="last-weight">
-              <span class="label">Last</span>
+              <span class="label">Last Top</span>
               ${lastSummary}
             </div>
           </div>
@@ -2454,10 +2461,7 @@
                 <label>Time (min)</label>
                 <input type="number" inputmode="decimal" placeholder="min" value="${data.cardio.time || ''}" data-cardio-field="time">
               </div>
-              <div>
-                <label>Distance (mi)</label>
-                <input type="number" inputmode="decimal" placeholder="mi" value="${data.cardio.distance || ''}" data-cardio-field="distance">
-              </div>
+              <button class="set-done cardio-done ${cardioDone ? 'done' : ''}" data-cardio-done>${cardioDone ? '✓' : '○'}</button>
             </div>
             <button class="history-toggle" data-action="toggle-history">View History</button>
             <div class="history">
@@ -2617,21 +2621,21 @@
       input.addEventListener('blur', handleSetChange);
     });
 
-    // Set done
-    document.querySelectorAll('.set-done').forEach(btn => {
+    // Set done — exclude cardio's tick (it has its own handler since it
+    // toggles data.cardio.done rather than data.sets[i].d).
+    document.querySelectorAll('.set-done:not([data-cardio-done])').forEach(btn => {
       btn.addEventListener('click', handleSetDone);
     });
 
-    // Cardio inputs. 'change'/'blur' persist the value (matches the set-input
-    // convention — save on commit, not per keystroke). 'input' is bound for
-    // the badge update only so the completion badge appears/disappears live
-    // as the user types both fields, without saving on every keystroke.
+    // Cardio tick — same look as .set-done, different handler.
+    document.querySelectorAll('[data-cardio-done]').forEach(btn => {
+      btn.addEventListener('click', handleCardioDone);
+    });
+
+    // Cardio inputs save value on change/blur (matches set-input convention).
     document.querySelectorAll('[data-cardio-field]').forEach(input => {
       input.addEventListener('change', handleCardioChange);
       input.addEventListener('blur', handleCardioChange);
-      input.addEventListener('input', (e) => {
-        updateCardioCompletion(e.target.closest('.exercise'));
-      });
     });
 
     // History toggles
@@ -3033,7 +3037,7 @@
       if (data) {
         if (newMode === 'cardio') {
           data.sets = [];
-          data.cardio = { time: '', distance: '' };
+          data.cardio = { time: '', distance: '', done: false };
         } else {
           data.sets = defaultSetsForMode(newMode);
           delete data.cardio;
@@ -3084,20 +3088,27 @@
     const field = e.target.dataset.cardioField;
     const data = getCardioData(exerciseId);
     data.cardio[field] = e.target.value;
-    updateCardioCompletion(exerciseEl);
     saveState();
   }
 
-  // Cardio's analogue to the set-based completion check. The orange badge
-  // shows on the parent row once both Time (min) and Distance (mi) are
-  // filled; clearing either hides it again. Reads from the live inputs so
-  // it works during 'input' events before state has been written.
-  function updateCardioCompletion(exerciseEl) {
-    if (!exerciseEl) return;
-    const inputs = exerciseEl.querySelectorAll('[data-cardio-field]');
-    if (!inputs.length) return;
-    const allFilled = Array.from(inputs).every(i => String(i.value).trim() !== '');
-    exerciseEl.classList.toggle('complete', allFilled);
+  // Cardio's tick — the parallel to handleSetDone for set-based exercises.
+  // Toggles data.cardio.done, flips the parent's .complete class so the
+  // badge follows in real time, and starts the rest timer on a fresh tick
+  // (not on un-tick) the same way set ticks do.
+  function handleCardioDone(e) {
+    e.stopPropagation();
+    const exerciseEl = e.target.closest('.exercise');
+    const exerciseId = exerciseEl.dataset.exercise;
+    const data = getCardioData(exerciseId);
+    const wasDone = !!data.cardio.done;
+    data.cardio.done = !wasDone;
+    e.target.classList.toggle('done');
+    e.target.textContent = data.cardio.done ? '✓' : '○';
+    exerciseEl.classList.toggle('complete', data.cardio.done);
+    saveState();
+    if (!wasDone && state.timerEnabled) {
+      startRestTimer(state.timerDuration);
+    }
   }
 
   // ============ FINISH DAY ============
@@ -3184,14 +3195,14 @@
 
       if (mode === 'cardio') {
         const data = getCardioData(ex.id);
-        if (data.cardio.time || data.cardio.distance) {
-          const summary = [
-            data.cardio.time ? `${data.cardio.time}min` : null,
-            data.cardio.distance ? `${data.cardio.distance}mi` : null
-          ].filter(Boolean).join(' / ');
+        if (data.cardio.time) {
+          const topTime = parseFloat(data.cardio.time) || 0;
+          const summary = `${data.cardio.time}min`;
           data.history = dropSameWeek(data.history);
-          data.history.push({ date: dateStr, iso: isoDate, summary });
+          data.history.push({ date: dateStr, iso: isoDate, summary, topTime });
           if (data.history.length > 60) data.history = data.history.slice(-60);
+          // Reset the cardio tick the same way set ticks reset on save.
+          data.cardio.done = false;
           savedCount++;
         }
         return;
