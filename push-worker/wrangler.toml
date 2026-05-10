@@ -1,0 +1,21 @@
+name = "splitstak-push"
+main = "src/index.js"
+compatibility_date = "2024-09-01"
+account_id = "ecebdd0071598823afe0586d3d92b31f"
+
+# VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY are set via:
+#   wrangler secret put VAPID_PRIVATE_KEY --config push-worker/wrangler.toml
+# Public key can be in [vars] since it's, well, public.
+[vars]
+VAPID_PUBLIC_KEY = "BPp0TWSW-BrkwQQMfldsXm58Sa0LgOgu0hvACpyoxysxIGE4ba9GiIGGuprR9EYez0-T655EpuZJsbAO2nfXwBY"
+VAPID_SUBJECT = "mailto:jacob@splitstak.com"
+
+# Per-subscription Durable Object that holds pending events and uses
+# alarm() to fire them at the right Wall-clock time.
+[[durable_objects.bindings]]
+name = "PUSH_TIMER"
+class_name = "PushTimer"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["PushTimer"]

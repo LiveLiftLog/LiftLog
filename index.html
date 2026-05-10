@@ -2117,7 +2117,9 @@
       {
         date: '2026-05-10',
         changes: [
-          'The rest timer now survives reloads. Close the tab, lock your phone, or refresh mid-rest and the countdown picks up exactly where it left off instead of disappearing. Dismiss still clears it instantly. Behind the scenes this also lays the groundwork for the lock-screen widget that\'s in progress.'
+          'The rest timer now survives reloads. Close the tab, lock your phone, or refresh mid-rest and the countdown picks up exactly where it left off instead of disappearing. Dismiss still clears it instantly. Behind the scenes this also lays the groundwork for the lock-screen widget that\'s in progress.',
+          'Rest timer now plays three sine-tone beeps when the app is open: a short start tone, three quick beeps when ten seconds remain, and a single brighter tone when it hits 00:00. The three tones are musically related (start, perfect fifth above, octave above) so the kit sounds like one set. Beeps mix with whatever music app you have running — they no longer take over the media session and pause Spotify. On Chrome on Android and Safari on iOS 16.4+, music volume briefly dims for each beep and restores after. iOS silent / Focus modes still mute the beeps; keep the ringer on.',
+          'Rest timer alerts now also fire when the phone screen is locked. Granting notification permission (asked the first time you start a timer) routes the warning and finish phases to your lock screen as notifications: "10 seconds left" with a quick double vibration tap, then "Rest complete" with three firmer pulses. When the app is open you hear the in-page tones above instead — never both. iOS lock-screen support is best-effort due to ongoing Apple Web Push limitations.'
         ]
       },
       {
@@ -3851,6 +3853,14 @@
 
   // ============ REST TIMER ============
   let timerInterval = null;
+  let timerPlayTimeouts = [];
+  let timerAudioElements = null; // { start, warning, finish } cached HTMLAudioElement
+  let timerSessionRestoreTimer = null;
+  let timerSilentCtx = null;
+  let timerSilentSource = null;
+  let timerKeepAliveVideo = null;
+  let timerKeepAliveStream = null;
+  let timerKeepAliveCanvas = null;
 
   function formatTime(seconds) {
     const m = Math.floor(seconds / 60);
@@ -3858,13 +3868,228 @@
     return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
   }
 
+  // Build a small WAV blob URL containing a sequence of pure sine-tone
+  // segments. Each segment is { freq, dur, amp } in (Hz, seconds, 0..1).
+  // freq=0 → silence. Used to pre-render the three short beep clips that
+  // the timer plays via HTMLAudioElement.
+  function buildBeepWavURL(segments) {
+    const sampleRate = 16000;
+    const totalSec = segments.reduce((s, x) => s + x.dur, 0);
+    const totalSamples = Math.max(1, Math.floor(totalSec * sampleRate));
+    const dataBytes = totalSamples * 2;
+    const fileBytes = 44 + dataBytes;
+    const buf = new ArrayBuffer(fileBytes);
+    const view = new DataView(buf);
+    let p = 0;
+    const writeStr = (s) => { for (let i = 0; i < s.length; i++) view.setUint8(p + i, s.charCodeAt(i)); p += s.length; };
+    writeStr('RIFF'); view.setUint32(p, fileBytes - 8, true); p += 4; writeStr('WAVE');
+    writeStr('fmt '); view.setUint32(p, 16, true); p += 4;
+    view.setUint16(p, 1, true); p += 2; view.setUint16(p, 1, true); p += 2;
+    view.setUint32(p, sampleRate, true); p += 4;
+    view.setUint32(p, sampleRate * 2, true); p += 4;
+    view.setUint16(p, 2, true); p += 2; view.setUint16(p, 16, true); p += 2;
+    writeStr('data'); view.setUint32(p, dataBytes, true); p += 4;
+    const dataStart = p;
+    let cursor = 0;
+    for (const seg of segments) {
+      const segSamples = Math.floor(seg.dur * sampleRate);
+      const fade = Math.min(Math.floor(0.010 * sampleRate), Math.floor(segSamples / 4));
+      for (let i = 0; i < segSamples; i++) {
+        let env = 1;
+        if (i < fade) env = i / fade;
+        else if (i > segSamples - fade) env = Math.max(0, (segSamples - i) / fade);
+        const s = seg.freq === 0 ? 0 : Math.sin(2 * Math.PI * seg.freq * i / sampleRate) * seg.amp * env;
+        view.setInt16(dataStart + (cursor + i) * 2, Math.max(-1, Math.min(1, s)) * 0x7FFF, true);
+      }
+      cursor += segSamples;
+    }
+    return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+  }
+
+  // Build the three beep clips the first time the timer is used, then
+  // cache. HTMLAudioElement (rather than Web Audio) is used so that
+  // Chrome on Android requests audio focus for playback and the OS
+  // ducks background music for the brief 'transient' window (paired with
+  // audioSession.type='transient' just before play).
+  function ensureTimerAudio() {
+    if (timerAudioElements) return;
+    timerAudioElements = {
+      start: new Audio(buildBeepWavURL([
+        { freq: 880, dur: 0.18, amp: 0.55 }
+      ])),
+      warning: new Audio(buildBeepWavURL([
+        { freq: 1320, dur: 0.08, amp: 0.55 },
+        { freq: 0,    dur: 0.08, amp: 0    },
+        { freq: 1320, dur: 0.08, amp: 0.55 },
+        { freq: 0,    dur: 0.08, amp: 0    },
+        { freq: 1320, dur: 0.08, amp: 0.55 }
+      ])),
+      finish: new Audio(buildBeepWavURL([
+        { freq: 1760, dur: 0.40, amp: 0.60 }
+      ]))
+    };
+    for (const k in timerAudioElements) {
+      timerAudioElements[k].preload = 'auto';
+    }
+  }
+
+  // Briefly flip navigator.audioSession.type to 'transient' for `holdMs`
+  // so the OS ducks background music while a beep plays, then restore
+  // to 'auto'. Spec is implemented on Chrome (Android) and Safari
+  // (iOS 16.4+); others silently skip.
+  function setTransientThenRestore(holdMs) {
+    if (!navigator.audioSession) return;
+    try { navigator.audioSession.type = 'transient'; } catch (e) {}
+    if (timerSessionRestoreTimer) clearTimeout(timerSessionRestoreTimer);
+    timerSessionRestoreTimer = setTimeout(() => {
+      try { navigator.audioSession.type = 'auto'; } catch (e) {}
+      timerSessionRestoreTimer = null;
+    }, holdMs);
+  }
+
+  // Background keep-alive: a 1 Hz inaudible Web Audio oscillator + a
+  // muted <video> playing a canvas-derived MediaStream. The video is
+  // what actually counts as "active media" for Chrome's backgrounding
+  // heuristic on Android (Web Audio alone does not), but because it's
+  // muted Chrome doesn't request audio focus and music keeps playing.
+  // Together they extend background lifetime so local setTimeouts have
+  // a chance to fire when the screen is briefly off.
+  function startTimerSilentLoop() {
+    const Ctor = window.AudioContext || window.webkitAudioContext;
+    if (Ctor) {
+      if (!timerSilentCtx || timerSilentCtx.state === 'closed') {
+        timerSilentCtx = new Ctor();
+      }
+      if (timerSilentCtx.state === 'suspended') {
+        try { timerSilentCtx.resume(); } catch (e) {}
+      }
+      if (timerSilentSource) {
+        try { timerSilentSource.stop(); } catch (e) {}
+        try { timerSilentSource.disconnect(); } catch (e) {}
+        timerSilentSource = null;
+      }
+      try {
+        const osc = timerSilentCtx.createOscillator();
+        const gain = timerSilentCtx.createGain();
+        osc.frequency.value = 1;
+        gain.gain.value = 0.0001;
+        osc.connect(gain).connect(timerSilentCtx.destination);
+        osc.start();
+        timerSilentSource = osc;
+      } catch (e) {}
+    }
+    if (!timerKeepAliveVideo) {
+      try {
+        timerKeepAliveCanvas = document.createElement('canvas');
+        timerKeepAliveCanvas.width = 1;
+        timerKeepAliveCanvas.height = 1;
+        const ctx2d = timerKeepAliveCanvas.getContext('2d');
+        ctx2d.fillStyle = '#000';
+        ctx2d.fillRect(0, 0, 1, 1);
+        if (typeof timerKeepAliveCanvas.captureStream === 'function') {
+          timerKeepAliveStream = timerKeepAliveCanvas.captureStream(1);
+          timerKeepAliveVideo = document.createElement('video');
+          timerKeepAliveVideo.muted = true;
+          timerKeepAliveVideo.playsInline = true;
+          timerKeepAliveVideo.setAttribute('playsinline', '');
+          timerKeepAliveVideo.setAttribute('muted', '');
+          timerKeepAliveVideo.loop = true;
+          timerKeepAliveVideo.style.cssText =
+            'position:absolute;left:-9999px;top:0;width:1px;height:1px;opacity:0;pointer-events:none;';
+          timerKeepAliveVideo.srcObject = timerKeepAliveStream;
+          document.body.appendChild(timerKeepAliveVideo);
+        }
+      } catch (e) {}
+    }
+    if (timerKeepAliveVideo) {
+      try {
+        timerKeepAliveVideo.muted = true;
+        const p = timerKeepAliveVideo.play();
+        if (p && typeof p.catch === 'function') p.catch(() => {});
+      } catch (e) {}
+    }
+  }
+
+  function stopTimerSilentLoop() {
+    if (timerSilentSource) {
+      try { timerSilentSource.stop(); } catch (e) {}
+      try { timerSilentSource.disconnect(); } catch (e) {}
+      timerSilentSource = null;
+    }
+    if (timerKeepAliveVideo) {
+      try { timerKeepAliveVideo.pause(); } catch (e) {}
+    }
+  }
+
+  function playTimerBeep(which, holdMs) {
+    setTransientThenRestore(holdMs);
+    const el = timerAudioElements && timerAudioElements[which];
+    if (!el) return;
+    try {
+      el.currentTime = 0;
+      const p = el.play();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    } catch (e) {}
+  }
+
+  function stopTimerAudio() {
+    for (const t of timerPlayTimeouts) clearTimeout(t);
+    timerPlayTimeouts = [];
+    if (timerSessionRestoreTimer) {
+      clearTimeout(timerSessionRestoreTimer);
+      timerSessionRestoreTimer = null;
+    }
+    if (timerAudioElements) {
+      for (const k in timerAudioElements) {
+        try { timerAudioElements[k].pause(); } catch (e) {}
+      }
+    }
+    stopTimerSilentLoop();
+    if (navigator.audioSession) {
+      try { navigator.audioSession.type = 'auto'; } catch (e) {}
+    }
+  }
+
   // Rest timer is driven by state.restEndsAt (epoch ms), so it survives
   // reloads, tab close, and phone lock. Same field is what the future
   // native widget bridge will mirror to iOS Live Activities / Android
   // RemoteViews.setChronometer.
+  //
+  // Audio path: synchronous start beep + setTimeouts for warning + finish
+  // musical kit. Visibility check on each fire prevents double-firing
+  // with the worker push when the page is backgrounded. Always paired
+  // with schedulePushBeeps(), which queues lock-screen notifications via
+  // the splitstak-push Cloudflare Worker; if local audio fires first
+  // it sends /complete to cancel the upcoming push.
   function startRestTimer(durationSec) {
     state.restEndsAt = Date.now() + durationSec * 1000;
     saveState();
+
+    try {
+      ensureTimerAudio();
+      startTimerSilentLoop();
+      playTimerBeep('start', 300);
+      if (durationSec >= 11) {
+        timerPlayTimeouts.push(setTimeout(() => {
+          if (document.visibilityState !== 'visible') return;
+          completePushMilestone('warning');
+          playTimerBeep('warning', 600);
+        }, (durationSec - 10) * 1000));
+      }
+      timerPlayTimeouts.push(setTimeout(() => {
+        if (document.visibilityState !== 'visible') return;
+        completePushMilestone('finish');
+        playTimerBeep('finish', 550);
+      }, durationSec * 1000));
+      timerPlayTimeouts.push(setTimeout(() => {
+        stopTimerSilentLoop();
+        if (navigator.audioSession) {
+          try { navigator.audioSession.type = 'auto'; } catch (e) {}
+        }
+      }, durationSec * 1000 + 1200));
+    } catch (e) {}
+
+    schedulePushBeeps(durationSec);
     showRestPopup();
   }
 
@@ -3913,8 +4138,140 @@
       clearInterval(timerInterval);
       timerInterval = null;
     }
+    stopTimerAudio();
+    cancelPushBeeps();
     const popup = document.getElementById('timerPopup');
     if (popup) popup.classList.remove('show');
+  }
+
+  // ============ LOCK-SCREEN PUSH ============
+  // Lock-screen reliability via Web Push. On Chrome Android the page
+  // suspends within ~10 seconds of screen lock and our setTimeout-based
+  // warning + finish beeps never fire. To get them while locked we send
+  // the wall-clock fire times to a small Cloudflare Worker
+  // (splitstak-push) which holds them in a per-subscription Durable
+  // Object and dispatches empty pushes at the right moments. The service
+  // worker turns each push into a notification: the service worker picks
+  // a distinctive vibration pattern per phase by reading the schedule
+  // we stash in IndexedDB on /schedule (warning = double-tap, finish =
+  // triple-pulse). When the page is visible the SW posts a message and
+  // skips the notification, while the page additionally races a
+  // /complete cancel so we never double-fire.
+  //
+  // Permission is requested implicitly the first time a timer starts
+  // after the user has not already granted/denied. If denied, every
+  // local-page beep still works exactly as before.
+  const PUSH_WORKER_URL = 'https://splitstak-push.jacoba1998.workers.dev';
+  const VAPID_PUBLIC_KEY = 'BPp0TWSW-BrkwQQMfldsXm58Sa0LgOgu0hvACpyoxysxIGE4ba9GiIGGuprR9EYez0-T655EpuZJsbAO2nfXwBY';
+  let pushSubscriptionJSON = null;
+  let pushSubscriptionTried = false;
+  let pushDisabled = !('serviceWorker' in navigator) || !('PushManager' in window) ||
+                     PUSH_WORKER_URL.indexOf('PLACEHOLDER') >= 0;
+  // Server-side fire times are offset by this many ms past the local
+  // Web Audio fire time so the page can race a /complete cancel to the
+  // worker and prevent the push from firing when the page is alive.
+  const PUSH_OFFSET_MS = 600;
+
+  function vapidKeyToBytes(b64) {
+    const padded = (b64 + '='.repeat((4 - b64.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(padded);
+    const out = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+
+  async function getOrSubscribePush() {
+    if (pushDisabled) return null;
+    if (pushSubscriptionJSON) return pushSubscriptionJSON;
+    if (pushSubscriptionTried) return null;
+    pushSubscriptionTried = true;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        if (Notification.permission === 'denied') return null;
+        if (Notification.permission !== 'granted') {
+          const perm = await Notification.requestPermission();
+          if (perm !== 'granted') return null;
+        }
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: vapidKeyToBytes(VAPID_PUBLIC_KEY),
+        });
+      }
+      pushSubscriptionJSON = sub.toJSON();
+      return pushSubscriptionJSON;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function schedulePushBeeps(durationSec) {
+    if (pushDisabled) return;
+    const sub = await getOrSubscribePush();
+    if (!sub) return;
+    const now = Date.now();
+    const warnTime = durationSec >= 11 ? now + (durationSec - 10) * 1000 + PUSH_OFFSET_MS : null;
+    const finishTime = now + durationSec * 1000 + PUSH_OFFSET_MS;
+    // Stash the schedule in IndexedDB so the service worker's push
+    // handler can identify which phase fired by comparing event time
+    // against these timestamps.
+    try {
+      await idbPutTimerSchedule({ warnTime, finishTime });
+    } catch (e) {}
+    const events = [];
+    if (warnTime != null) events.push({ fireAt: warnTime,   kind: 'warning' });
+    events.push({ fireAt: finishTime, kind: 'finish' });
+    try {
+      await fetch(PUSH_WORKER_URL + '/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscription: sub, events }),
+      });
+    } catch (e) {}
+  }
+
+  async function cancelPushBeeps() {
+    if (pushDisabled || !pushSubscriptionJSON) return;
+    try {
+      await fetch(PUSH_WORKER_URL + '/unschedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: pushSubscriptionJSON.endpoint }),
+      });
+    } catch (e) {}
+  }
+
+  function completePushMilestone(kind) {
+    if (pushDisabled || !pushSubscriptionJSON) return;
+    try {
+      fetch(PUSH_WORKER_URL + '/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: pushSubscriptionJSON.endpoint, kind }),
+      }).catch(() => {});
+    } catch (e) {}
+  }
+
+  // Tiny IndexedDB helpers — used to share the current timer's schedule
+  // with the service worker's push handler (which reads it to pick the
+  // right vibration pattern per phase).
+  function idbOpen() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open('splitstak', 1);
+      req.onupgradeneeded = () => { req.result.createObjectStore('kv'); };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  async function idbPutTimerSchedule(value) {
+    const db = await idbOpen();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('kv', 'readwrite');
+      tx.objectStore('kv').put(value, 'timer-schedule');
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
   }
 
   // Wire up dismiss button once

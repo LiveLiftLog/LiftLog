@@ -3,7 +3,7 @@
 // Cache-first for static assets (icons, manifest) for instant loads.
 // App stays usable offline once index.html has been visited at least once.
 
-const CACHE_NAME = 'splitstak-v1';
+const CACHE_NAME = 'splitstak-v3';
 const PRECACHE = [
   '/',
   '/index.html',
@@ -25,6 +25,93 @@ self.addEventListener('activate', (event) => {
       keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
     )).then(() => self.clients.claim())
   );
+});
+
+// Web Push from the splitstak-push Cloudflare Worker. The page schedules
+// exactly TWO push events per timer — one for the 10-second warning,
+// one for the finish — and each fires a single notification with a
+// distinctive vibration pattern. Multi-chime is impossible on Android
+// (the OS rate-limits notification sounds to one per app per second,
+// extra sounds dropped not queued) so we communicate phase via vibe
+// pattern instead of chime count. The body text also names the phase
+// for users who glance at the lock screen.
+//
+// Phase identification: pushes have no payload, so the SW reads the
+// timer schedule (warnTime / finishTime wall-clock timestamps) the page
+// stored in IndexedDB on /schedule, and picks the closest phase to "now".
+//
+// Visible-client suppression remains, plus the page races a /complete
+// cancel to the worker as a deterministic backup — together they ensure
+// we never double-fire when the app is open.
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('splitstak', 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore('kv'); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+function idbGetTimerSchedule() {
+  return idbOpen().then((db) => new Promise((resolve, reject) => {
+    const tx = db.transaction('kv', 'readonly');
+    const req = tx.objectStore('kv').get('timer-schedule');
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  }));
+}
+
+self.addEventListener('push', (event) => {
+  event.waitUntil((async () => {
+    const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const visibleClient = allClients.find((c) => c.visibilityState === 'visible');
+    if (visibleClient) {
+      try { visibleClient.postMessage({ type: 'splitstak-push' }); } catch (e) {}
+      return;
+    }
+
+    // Identify phase by which scheduled timestamp is closest to right now.
+    let body = 'Rest timer';
+    let vibrate = [200];
+    try {
+      const schedule = await idbGetTimerSchedule();
+      if (schedule) {
+        const now = Date.now();
+        const warnDist = schedule.warnTime != null ? Math.abs(now - schedule.warnTime) : Infinity;
+        const finishDist = schedule.finishTime != null ? Math.abs(now - schedule.finishTime) : Infinity;
+        if (finishDist <= warnDist && finishDist < 10000) {
+          body = 'Rest complete';
+          vibrate = [300, 100, 300, 100, 300]; // three firmer pulses
+        } else if (warnDist < 10000) {
+          body = '10 seconds left';
+          vibrate = [150, 80, 150]; // quick double-tap
+        }
+      }
+    } catch (e) {}
+
+    await self.registration.showNotification('SPLITSTAK', {
+      body,
+      tag: 'splitstak-' + Date.now(),
+      silent: false,
+      vibrate,
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      data: { ts: Date.now() },
+    });
+  })());
+});
+
+// Tapping the lock-screen notification jumps back into the app.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil((async () => {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const existing = clients.find((c) => c.url.includes('splitstak'));
+    if (existing) {
+      try { existing.focus(); } catch (e) {}
+      return;
+    }
+    try { await self.clients.openWindow('/'); } catch (e) {}
+  })());
 });
 
 self.addEventListener('fetch', (event) => {
