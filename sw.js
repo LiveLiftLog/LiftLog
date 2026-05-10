@@ -3,7 +3,7 @@
 // Cache-first for static assets (icons, manifest) for instant loads.
 // App stays usable offline once index.html has been visited at least once.
 
-const CACHE_NAME = 'splitstak-v3';
+const CACHE_NAME = 'splitstak-v4';
 const PRECACHE = [
   '/',
   '/index.html',
@@ -27,18 +27,19 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Web Push from the splitstak-push Cloudflare Worker. The page schedules
-// exactly TWO push events per timer — one for the 10-second warning,
-// one for the finish — and each fires a single notification with a
-// distinctive vibration pattern. Multi-chime is impossible on Android
-// (the OS rate-limits notification sounds to one per app per second,
-// extra sounds dropped not queued) so we communicate phase via vibe
-// pattern instead of chime count. The body text also names the phase
-// for users who glance at the lock screen.
+// Web Push from the splitstak-push Cloudflare Worker. One push per
+// phase (warning, finish) lands a single notification on the lock screen.
+// The phase-distinguishing body text ("⚠ 10 seconds left" vs
+// "✓ Rest complete") is the only per-event signal we control — Chrome
+// on Android delegates everything else to the user-managed
+// NotificationChannel: sound, vibration, importance, lock-screen
+// visibility. So we don't ship vibration patterns (Android 8+ ignores
+// them in favour of channel settings) and we don't try to spawn more
+// than one notification per phase.
 //
 // Phase identification: pushes have no payload, so the SW reads the
 // timer schedule (warnTime / finishTime wall-clock timestamps) the page
-// stored in IndexedDB on /schedule, and picks the closest phase to "now".
+// stored in IndexedDB on /schedule and picks the closest phase to "now".
 //
 // Visible-client suppression remains, plus the page races a /complete
 // cancel to the worker as a deterministic backup — together they ensure
@@ -71,7 +72,6 @@ self.addEventListener('push', (event) => {
 
     // Identify phase by which scheduled timestamp is closest to right now.
     let body = 'Rest timer';
-    let vibrate = [200];
     try {
       const schedule = await idbGetTimerSchedule();
       if (schedule) {
@@ -79,11 +79,9 @@ self.addEventListener('push', (event) => {
         const warnDist = schedule.warnTime != null ? Math.abs(now - schedule.warnTime) : Infinity;
         const finishDist = schedule.finishTime != null ? Math.abs(now - schedule.finishTime) : Infinity;
         if (finishDist <= warnDist && finishDist < 10000) {
-          body = 'Rest complete';
-          vibrate = [300, 100, 300, 100, 300]; // three firmer pulses
+          body = '✓ Rest complete';
         } else if (warnDist < 10000) {
-          body = '10 seconds left';
-          vibrate = [150, 80, 150]; // quick double-tap
+          body = '⚠ 10 seconds left';
         }
       }
     } catch (e) {}
@@ -92,7 +90,6 @@ self.addEventListener('push', (event) => {
       body,
       tag: 'splitstak-' + Date.now(),
       silent: false,
-      vibrate,
       icon: '/icon-192.png',
       badge: '/icon-192.png',
       data: { ts: Date.now() },

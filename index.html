@@ -2119,7 +2119,7 @@
         changes: [
           'The rest timer now survives reloads. Close the tab, lock your phone, or refresh mid-rest and the countdown picks up exactly where it left off instead of disappearing. Dismiss still clears it instantly. Behind the scenes this also lays the groundwork for the lock-screen widget that\'s in progress.',
           'Rest timer now plays three sine-tone beeps when the app is open: a short start tone, three quick beeps when ten seconds remain, and a single brighter tone when it hits 00:00. The three tones are musically related (start, perfect fifth above, octave above) so the kit sounds like one set. Beeps mix with whatever music app you have running — they no longer take over the media session and pause Spotify. On Chrome on Android and Safari on iOS 16.4+, music volume briefly dims for each beep and restores after. iOS silent / Focus modes still mute the beeps; keep the ringer on.',
-          'Rest timer alerts now also fire when the phone screen is locked. Granting notification permission (asked the first time you start a timer) routes the warning and finish phases to your lock screen as notifications: "10 seconds left" with a quick double vibration tap, then "Rest complete" with three firmer pulses. When the app is open you hear the in-page tones above instead — never both. iOS lock-screen support is best-effort due to ongoing Apple Web Push limitations.'
+          'Rest timer alerts now also fire when the phone screen is locked. Granting notification permission (asked the first time you start a timer) routes the warning and finish phases to your lock screen as notifications labelled "⚠ 10 seconds left" and "✓ Rest complete". When the app is open you hear the in-page tones above instead — never both. The notification sound and vibration are user-customizable per phone via Settings → Apps → SPLITSTAK → Notifications → channel; SETTINGS card now has a small note pointing at this. iOS lock-screen support is best-effort due to ongoing Apple Web Push limitations.'
         ]
       },
       {
@@ -2337,7 +2337,8 @@
             </label>
           </div>
         </div>
-        <p style="font-size: 12px; color: var(--text-dim); margin-top: 8px; margin-bottom: 16px;">When on, a timer pops up after each completed set. Dismiss anytime.</p>
+        <p style="font-size: 12px; color: var(--text-dim); margin-top: 8px; margin-bottom: 8px;">When on, a timer pops up after each completed set. Dismiss anytime.</p>
+        <p style="font-size: 12px; color: var(--text-dim); margin-bottom: 16px;">Lock-screen alerts (10-second warning + finish) play your phone's default notification chime. To pick a custom sound, open phone <strong>Settings → Apps → SPLITSTAK → Notifications</strong>, tap the channel, then choose <strong>Sound</strong>. Vibration is in the same place.</p>
 
         <div style="border-top: 1px solid var(--border); padding-top: 14px; margin-top: 6px;">
           <div style="font-family: 'Bebas Neue', sans-serif; font-size: 16px; letter-spacing: 0.08em; color: var(--accent); margin-bottom: 4px;">DAY ASSIGNMENT</div>
