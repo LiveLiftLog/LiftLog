@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0a0a0a">
+  <title>SPLITSTAK — Privacy Policy</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --surface: #161616;
+      --border: #2a2a2a;
+      --text: #f5f5f5;
+      --text-dim: #888;
+      --accent: #ff5722;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; line-height: 1.6; }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 32px 20px 80px; }
+    header { border-bottom: 1px solid var(--border); padding-bottom: 24px; margin-bottom: 32px; }
+    .logo { font-family: 'Bebas Neue', sans-serif; font-size: 32px; letter-spacing: 0.05em; }
+    .logo .stak { color: var(--accent); }
+    .subtitle { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.15em; margin-top: 4px; }
+    h1 { font-family: 'Bebas Neue', sans-serif; font-size: 36px; letter-spacing: 0.04em; margin: 0 0 4px; }
+    h2 { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 0.06em; color: var(--accent); margin: 32px 0 12px; }
+    p { margin: 0 0 16px; color: var(--text); }
+    .meta { color: var(--text-dim); font-family: 'JetBrains Mono', monospace; font-size: 12px; margin: 0 0 24px; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    ul { padding-left: 22px; margin: 0 0 16px; }
+    li { margin-bottom: 8px; }
+    code { font-family: 'JetBrains Mono', monospace; font-size: 13px; background: var(--surface); padding: 2px 6px; border: 1px solid var(--border); }
+    .back { display: inline-block; margin-top: 32px; font-family: 'JetBrains Mono', monospace; font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-dim); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">SPLIT<span class="stak">STAK</span></div>
+      <div class="subtitle">Privacy Policy</div>
+    </header>
+
+    <h1>Privacy Policy</h1>
+    <p class="meta">Last updated: 2026-05-10</p>
+
+    <p>SPLITSTAK is a workout tracker built with a single principle: your data lives on your device, not on a server. This policy explains what that actually means in practice, what limited information does leave your device, and your rights over it.</p>
+    <p>This policy applies to the SPLITSTAK web app at <a href="https://splitstak.com">splitstak.com</a>, the SPLITSTAK Progressive Web App when installed via a web browser, and the SPLITSTAK Android application distributed through the Google Play Store. Where the policy says "the app," it means all three unless otherwise noted.</p>
+
+    <h2>Who is responsible</h2>
+    <p>SPLITSTAK is operated by Jacob, the developer behind <a href="https://splitstak.com">splitstak.com</a>, as an individual. For privacy questions or data requests, contact <a href="mailto:jacob@splitstak.com">jacob@splitstak.com</a>.</p>
+
+    <h2>What we store</h2>
+    <p>The app stores the following data <strong>locally on your device only</strong>, in your browser's or app's local storage:</p>
+    <ul>
+      <li>Your workout plan (workout names, day assignments, exercises, target rep ranges)</li>
+      <li>The sets, reps, weights, distances, and times you log</li>
+      <li>Workout history (one entry per day per workout)</li>
+      <li>Your settings — including the rest timer duration, whether the timer is enabled, and your widget step-size preferences</li>
+      <li>An acknowledgement flag indicating you've read the in-app data warning</li>
+    </ul>
+    <p>This data never leaves your device unless you actively export it (see "Backup and export" below). There is no SPLITSTAK account, no cloud sync, no analytics, and no advertising identifiers.</p>
+
+    <h2>What we send off your device</h2>
+    <p>Two pieces of information are transmitted away from your device, and only when you opt in:</p>
+    <ul>
+      <li><strong>Web Push subscription endpoint.</strong> If you grant notification permission so that rest-timer alerts can fire while your phone is locked, your browser generates a unique push subscription endpoint (a URL provided by your browser vendor's push service — Google FCM for Chrome, Mozilla Autopush for Firefox, Apple Push for Safari). The app sends this endpoint, along with the wall-clock times your warning and finish notifications should fire, to a small backend service operated for SPLITSTAK on Cloudflare Workers. The backend dispatches the notifications at those times and then forgets them. The endpoint is not linked to any account or personal identifier — it identifies a browser instance, not a person. You can revoke this at any time by disabling notification permission for SPLITSTAK in your phone or browser settings.</li>
+      <li><strong>Standard web request metadata.</strong> Cloudflare, our hosting provider, automatically logs IP addresses and browser user-agent strings for the splitstak.com site and the push backend, as it does for any site it serves. We do not retain or analyze these logs ourselves; they are governed by <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare's Privacy Policy</a>.</li>
+    </ul>
+
+    <h2>What we do NOT collect</h2>
+    <ul>
+      <li>No name, email address, phone number, or other identifier you've given us</li>
+      <li>No precise or approximate location</li>
+      <li>No device identifier (advertising ID, IMEI, etc.)</li>
+      <li>No contact list, photos, microphone, or camera data</li>
+      <li>No usage analytics, telemetry, or crash reports</li>
+      <li>No cookies for tracking; the app uses local storage for your workout data only</li>
+      <li>No third-party advertising or marketing pixels</li>
+    </ul>
+
+    <h2>Backup and export</h2>
+    <p>You can export all of your data to a CSV file at any time from <strong>DATA + SETNG → BACKUP &amp; RESTORE → Export</strong>. This file is generated on your device and downloaded directly. We never see it. Importing a CSV file you previously exported (or one a friend shared with you) is also fully local — the file is read and parsed in your browser or app and never uploaded anywhere.</p>
+
+    <h2>How long we keep data</h2>
+    <p>Your workout data is kept locally on your device until you choose to clear it (using <strong>DATA + SETNG → DATA WIPE → Reset to Defaults</strong>, by clearing your browser's site data, or by uninstalling the app).</p>
+    <p>Push subscription endpoints sent to the SPLITSTAK Workers backend are stored only for as long as is necessary to fire your scheduled notifications — typically minutes — and are deleted immediately when the notifications fire or when you dismiss the timer. We do not retain a long-term record of subscriptions.</p>
+
+    <h2>Children</h2>
+    <p>SPLITSTAK is not directed at children under 13 and we do not knowingly collect any personal information from children. The app does not require an account, so there is no mechanism by which a child could submit identifying data.</p>
+
+    <h2>Your rights</h2>
+    <p>Because we do not store personal data on a server linked to your identity, most data-subject requests (access, deletion, correction) are exercised by you directly on your device:</p>
+    <ul>
+      <li><strong>Access</strong> — your data is fully visible in the app at all times. Use Export to download a complete copy as CSV.</li>
+      <li><strong>Deletion</strong> — use DATA WIPE to clear all data, or uninstall the app, or clear browser site data for splitstak.com.</li>
+      <li><strong>Notification revocation</strong> — disable notification permission for SPLITSTAK in your phone settings or browser settings; the push subscription is invalidated immediately.</li>
+    </ul>
+    <p>If you have an active push subscription you want manually deleted from the SPLITSTAK Workers backend before its scheduled notifications fire, contact <a href="mailto:jacob@splitstak.com">jacob@splitstak.com</a> with the subscription endpoint URL.</p>
+
+    <h2>Security</h2>
+    <p>The app and the Workers backend communicate over HTTPS. The Workers backend uses VAPID-signed Web Push (a standard browser-vendor cryptographic protocol) and stores no payload data — only the wall-clock fire times and the subscription endpoint, both deleted as soon as the notifications fire.</p>
+
+    <h2>Changes to this policy</h2>
+    <p>If this policy changes in a way that affects how your data is handled, the change will be reflected in the "Last updated" date at the top, and the in-app changelog will mention it.</p>
+
+    <h2>Contact</h2>
+    <p><a href="mailto:jacob@splitstak.com">jacob@splitstak.com</a></p>
+
+    <a class="back" href="/">← back to splitstak</a>
+  </div>
+</body>
+</html>
