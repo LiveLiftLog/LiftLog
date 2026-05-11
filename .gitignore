@@ -24,6 +24,13 @@ mobile/ios/DerivedData/
 *.apk
 *.aab
 
+# Signing materials — NEVER commit these. Lose the keystore and you lose
+# the ability to push updates to the Play Store listing under the same
+# package id. Back the .jks file up out-of-band (password manager, etc.).
+*.jks
+*.keystore
+mobile/android/keystore.properties
+
 # OS / editor
 .DS_Store
 Thumbs.db
