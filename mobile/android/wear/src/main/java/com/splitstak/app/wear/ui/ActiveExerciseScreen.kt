@@ -139,7 +139,7 @@ fun ActiveExerciseScreen(snapshot: Snapshot) {
                 return@collect
             }
             accum += delta
-            val threshold = if (f == "exercise") 50f else 28f
+            val threshold = if (f == "exercise") 80f else 42f
             if (abs(accum) >= threshold) {
                 val sign = if (accum > 0) 1 else -1
                 accum = 0f
@@ -154,9 +154,10 @@ fun ActiveExerciseScreen(snapshot: Snapshot) {
                     "cdist"  -> ActionSender.incDistance(context, exId, sign.toDouble())
                 }
                 Haptic.tick(context)
-                // Ratchet lockout: longer for exercise nav (bigger change
-                // per step), shorter for value increments.
-                lockedUntilMs = now + if (f == "exercise") 600L else 400L
+                // Ratchet lockout: long enough that sustained spinning
+                // produces ~1 fire/sec for values, ~1/sec for exercise
+                // nav, so landing on a specific value is deliberate.
+                lockedUntilMs = now + if (f == "exercise") 1100L else 700L
             }
         }
     }
@@ -357,13 +358,13 @@ private fun ExerciseSemicircle(
     pulseAlphaState: State<Float>,
     onClick: () -> Unit
 ) {
-    // Smaller, shorter semicircle. fillMaxWidth(0.9) + aspectRatio(2.6)
-    // gives a wide, shallow arc that occupies roughly the top third of
-    // the screen rather than crowding the full top half.
+    // Wider-than-tall semicircle that occupies roughly the top 40% of
+    // the screen — enough vertical room for name + target + SET row
+    // without crowding the watch bottom.
     Box(
         modifier = Modifier
-            .fillMaxWidth(0.9f)
-            .aspectRatio(2.6f)
+            .fillMaxWidth(0.92f)
+            .aspectRatio(2.2f)
             .background(SplitstakColors.Surface, shape = SemicircleShape)
             .pointerInput(Unit) { detectTapGestures { onClick() } }
     ) {
@@ -383,9 +384,9 @@ private fun ExerciseSemicircle(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = 14.dp, end = 14.dp, top = 24.dp, bottom = 4.dp),
+                .padding(start = 14.dp, end = 14.dp, top = 32.dp, bottom = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(1.dp)
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Text(
                 text = exercise.name.uppercase(),
