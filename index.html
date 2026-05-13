@@ -2428,6 +2428,11 @@
       {
         date: '2026-05-13',
         changes: [
+          'Wear OS companion: dropped the ‹ › exercise-nav buttons. The exercise name + target + set counter now lives inside its own focusable box, so you tap to focus it and spin the crown to switch exercises — same interaction model as the WT / RPS boxes. Less clutter, fewer tiny tap targets, one mental model for everything on screen.',
+          'Wear OS companion: crown indicator arrow now respects "Worn on right wrist" — the arrow pulses on whichever side your physical crown actually is on, lefty or righty.',
+          'Wear OS companion: cardio exercises now correctly show "CARDIO" in the exercise box instead of "SET 1/0".',
+          'Wear OS companion: long exercise names (HANGING KNEE RAISES, ROMANIAN DEADLIFTS, etc.) now wrap to two lines instead of getting truncated mid-word.',
+          'Wear OS companion: the watch tile now shows whichever exercise you last interacted with on the watch (not just whichever one the phone has selected), so glancing at the tile mid-workout stays in sync with where you left off.',
           'Wear OS companion: switched the watch UI to the new side-by-side WT / RPS boxes — no more ± buttons. Tap a box to focus it (orange pulsing border), spin the crown to adjust, tap again to release. Crown-arrow indicator confirms which box the crown is wired to. Layout shrunk to fit the Pixel Watch screen properly so the completion button no longer clips at the bottom.',
           'Wear OS companion: the ◀ ▶ arrows next to "SET 1/3" now actually flip exercises on the watch — earlier the watch sent the action to the phone but the phone never told the watch to re-select.',
           'Wear OS companion: weight / rep / done taps now respond instantly. Previously every press waited on a watch→phone→watch round trip (~300ms); the watch now mutates its own snapshot optimistically and reconciles with the phone in the background.',

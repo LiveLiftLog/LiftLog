@@ -1,5 +1,8 @@
 package com.splitstak.app.wear.ui
 
+import android.content.Context
+import android.view.Surface
+import android.view.WindowManager
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -16,6 +19,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -31,7 +35,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -57,22 +60,27 @@ import kotlinx.coroutines.delay
 /**
  * The main interaction surface — one exercise, one set displayed at a time.
  *
- * Layout (compact for the Pixel Watch's ~390px circular face):
- *   - Exercise name + target (top)
- *   - "‹ SET 2/3 ›" row (taps cycle to prev/next exercise)
- *   - Side-by-side value boxes (WT / RPS, or mode-appropriate)
- *       · Tap a box to focus it (orange pulsing border).
- *       · Rotating the crown adjusts the focused value.
- *       · Tap the focused box again to release focus.
- *   - Done circle (tap to mark the set complete)
- *   - Progress dots
+ * Three focusable rectangles, all driven by the same pattern:
+ *   1. Tap the rectangle → orange pulsing border (focused).
+ *   2. Spin the crown → adjusts the focused field. The crown indicator
+ *      arrow pulses on the side the crown is physically on.
+ *   3. Tap again → release focus, crown becomes idle.
  *
- * On hitting a PR, a full-face black overlay flashes "PR" for ~3s before
- * fading. Every interaction calls [ActionSender] which:
- *   1. Mutates WatchState locally for instant UI feedback
- *   2. Sends the action to the phone over MessageClient
- *   3. The phone applies the same mutation against the source of truth
- *      and re-publishes the snapshot, reconciling any drift
+ * The three rectangles:
+ *   - Exercise box (top): name + target + "SET 2/3". Crown cycles exercises.
+ *   - WT / RPS boxes (or mode-equivalent): crown adjusts the value.
+ *
+ * The done circle below is a plain tap toggle; no focus needed because
+ * there's nothing to "adjust" on it.
+ *
+ * On hitting a PR, a full-face black overlay flashes "PR" for ~3s. Every
+ * interaction calls [ActionSender], which optimistically mutates the
+ * watch's local snapshot for instant feedback and sends the same action
+ * to the phone over MessageClient for the source-of-truth update.
+ *
+ * Crown side: Wear OS rotates the display 180° when the user picks
+ * "Worn on right wrist" so the physical crown stays on the dominant-hand
+ * side. We detect that rotation and flip the arrow indicator accordingly.
  */
 @Composable
 fun ActiveExerciseScreen(snapshot: Snapshot) {
@@ -82,14 +90,19 @@ fun ActiveExerciseScreen(snapshot: Snapshot) {
         ?: snapshot.currentExercise()
         ?: return
 
+    val isCardio = exercise.kind == "cardio"
+
     val setIdx = remember(exercise.id, exercise.sets) {
         // Default to the first incomplete set; falls back to last set.
         val idx = exercise.sets.indexOfFirst { !it.d }
         if (idx >= 0) idx else (exercise.sets.size - 1).coerceAtLeast(0)
     }
 
-    // Which box is focused for crown input. null = none (crown is idle).
-    var focused by remember(exercise.id, setIdx) { mutableStateOf<String?>(null) }
+    // Which rectangle is focused for crown input. null = none (crown idle).
+    // Intentionally NOT keyed on exercise.id — when the user holds the
+    // exercise box focused and spins the crown to nav, we want focus to
+    // persist across the resulting exercise change so they can keep going.
+    var focused by remember { mutableStateOf<String?>(null) }
 
     // Compose focus + rotary handling. The outer Box always holds focus so
     // crown events route to our handler regardless of which UI box is
@@ -97,14 +110,14 @@ fun ActiveExerciseScreen(snapshot: Snapshot) {
     val focusRequester = remember { FocusRequester() }
     var rotaryAccum by remember { mutableStateOf(0f) }
     LaunchedEffect(Unit) {
-        // requestFocus() can throw if the modifier isn't attached yet;
-        // a tiny delay lets the focusable node settle.
         try {
             delay(50)
             focusRequester.requestFocus()
         } catch (_: Exception) {
         }
     }
+
+    val isLefty = remember { detectLefty(context) }
 
     // PR overlay — rising edge of exercise.isPr while id stays constant.
     var showPrOverlay by remember { mutableStateOf(false) }
@@ -127,13 +140,15 @@ fun ActiveExerciseScreen(snapshot: Snapshot) {
             .onRotaryScrollEvent { event ->
                 val f = focused ?: return@onRotaryScrollEvent false
                 rotaryAccum += event.verticalScrollPixels
-                // Roughly one detent on the Pixel Watch crown. Lower
-                // value = faster ramp; higher = more controlled.
-                val threshold = 40f
+                // One crown detent ≈ 40px of scroll. Exercise nav uses a
+                // larger threshold so the user doesn't blow past multiple
+                // exercises with a single roll.
+                val threshold = if (f == "exercise") 70f else 40f
                 while (abs(rotaryAccum) >= threshold) {
                     val sign = if (rotaryAccum > 0) 1 else -1
                     rotaryAccum -= sign * threshold
                     when (f) {
+                        "exercise" -> ActionSender.nav(context, sign)
                         "weight" -> ActionSender.incWeight(context, exercise.id, setIdx, sign)
                         "reps"   -> ActionSender.incReps(context, exercise.id, setIdx, sign)
                         "hold"   -> ActionSender.incHold(context, exercise.id, setIdx, sign)
@@ -147,68 +162,37 @@ fun ActiveExerciseScreen(snapshot: Snapshot) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 14.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterVertically),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Title
-            Text(
-                text = exercise.name.uppercase(),
-                fontFamily = FontFamily.SansSerif,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = SplitstakColors.Text,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            // Target (or PR tag inline when relevant)
-            val targetLine = buildString {
-                if (exercise.target.isNotEmpty()) append(exercise.target)
-                if (exercise.isPr) {
-                    if (isNotEmpty()) append(" · ")
-                    append("PR")
+            ExerciseBox(
+                exercise = exercise,
+                setIdx = setIdx,
+                isCardio = isCardio,
+                focused = focused == "exercise",
+                onClick = {
+                    focused = if (focused == "exercise") null else "exercise"
                 }
-            }
-            if (targetLine.isNotEmpty()) {
-                Text(
-                    text = targetLine,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 9.sp,
-                    color = SplitstakColors.Accent,
-                    maxLines = 1
-                )
-            }
-
-            // SET row with ‹ ›
-            ExerciseNavRow(
-                label = when (exercise.mode) {
-                    "cardio" -> "CARDIO"
-                    else -> "SET ${setIdx + 1}/${exercise.sets.size}"
-                },
-                onPrev = { ActionSender.nav(context, -1) },
-                onNext = { ActionSender.nav(context, 1) }
             )
 
-            // Value boxes
             BodyBoxes(
                 exercise = exercise,
                 setIdx = setIdx,
+                isCardio = isCardio,
                 focused = focused,
-                onToggleFocus = { tag ->
-                    focused = if (focused == tag) null else tag
-                }
+                onToggleFocus = { tag -> focused = if (focused == tag) null else tag }
             )
 
-            // Done circle
-            val isDone: Boolean = when (exercise.mode) {
-                "cardio" -> exercise.cardio?.done == true
-                else -> exercise.sets.getOrNull(setIdx)?.d == true
+            val isDone: Boolean = if (isCardio) {
+                exercise.cardio?.done == true
+            } else {
+                exercise.sets.getOrNull(setIdx)?.d == true
             }
             DoneCircle(
                 done = isDone,
                 onClick = {
-                    if (exercise.mode == "cardio") {
+                    if (isCardio) {
                         ActionSender.toggleDone(context, exercise.id, -1)
                     } else {
                         ActionSender.toggleDone(context, exercise.id, setIdx)
@@ -216,12 +200,11 @@ fun ActiveExerciseScreen(snapshot: Snapshot) {
                 }
             )
 
-            // Progress dots
             ProgressDots(exercises = snapshot.exercises)
         }
 
-        // Crown indicator — pulsing arrow on the right edge (Pixel Watch
-        // crown is right-mounted) when a box is focused.
+        // Crown indicator arrow — pulses on whichever side the crown is
+        // physically on (right for default, left for lefty/right-wrist).
         if (focused != null) {
             val pulse = rememberInfiniteTransition(label = "crown-pulse")
             val pulseAlpha by pulse.animateFloat(
@@ -235,11 +218,11 @@ fun ActiveExerciseScreen(snapshot: Snapshot) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(end = 2.dp),
-                contentAlignment = Alignment.CenterEnd
+                    .padding(horizontal = 2.dp),
+                contentAlignment = if (isLefty) Alignment.CenterStart else Alignment.CenterEnd
             ) {
                 Text(
-                    text = "›",
+                    text = if (isLefty) "‹" else "›",
                     fontFamily = FontFamily.SansSerif,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
@@ -249,7 +232,7 @@ fun ActiveExerciseScreen(snapshot: Snapshot) {
             }
         }
 
-        // PR overlay — full face black + giant "PR"
+        // PR overlay
         if (showPrOverlay) {
             Box(
                 modifier = Modifier
@@ -269,45 +252,84 @@ fun ActiveExerciseScreen(snapshot: Snapshot) {
     }
 }
 
-@Composable
-private fun ExerciseNavRow(
-    label: String,
-    onPrev: () -> Unit,
-    onNext: () -> Unit
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        NavArrow(label = "‹", onClick = onPrev)
-        Text(
-            text = label,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 9.sp,
-            color = SplitstakColors.TextDim,
-            modifier = Modifier.width(58.dp),
-            textAlign = TextAlign.Center
-        )
-        NavArrow(label = "›", onClick = onNext)
-    }
+/** Worn-on-right-wrist mode rotates the display 180°. */
+private fun detectLefty(context: Context): Boolean = try {
+    @Suppress("DEPRECATION")
+    val rotation = (context.getSystemService(Context.WINDOW_SERVICE) as WindowManager)
+        .defaultDisplay.rotation
+    rotation == Surface.ROTATION_180
+} catch (_: Exception) {
+    false
 }
 
 @Composable
-private fun NavArrow(label: String, onClick: () -> Unit) {
-    Box(
+private fun ExerciseBox(
+    exercise: Exercise,
+    setIdx: Int,
+    isCardio: Boolean,
+    focused: Boolean,
+    onClick: () -> Unit
+) {
+    val pulse = rememberInfiniteTransition(label = "ex-pulse")
+    val pulseAlpha by pulse.animateFloat(
+        initialValue = if (focused) 0.4f else 1f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(700, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "ex-pulse-alpha"
+    )
+    val borderColor: Color = if (focused) {
+        SplitstakColors.Accent.copy(alpha = pulseAlpha)
+    } else {
+        SplitstakColors.Border
+    }
+
+    val targetLine = buildString {
+        if (exercise.target.isNotEmpty()) append(exercise.target)
+        if (exercise.isPr) {
+            if (isNotEmpty()) append(" · ")
+            append("PR")
+        }
+    }
+
+    Column(
         modifier = Modifier
-            .size(22.dp)
-            .clip(CircleShape)
+            .fillMaxWidth(0.94f)
             .background(SplitstakColors.Surface)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
+            .border(1.5.dp, borderColor)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 6.dp, vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = label,
+            text = exercise.name.uppercase(),
             fontFamily = FontFamily.SansSerif,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
-            color = SplitstakColors.Text
+            fontSize = 11.sp,
+            lineHeight = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = SplitstakColors.Text,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        if (targetLine.isNotEmpty()) {
+            Text(
+                text = targetLine,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 8.sp,
+                color = SplitstakColors.Accent,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Text(
+            text = if (isCardio) "CARDIO" else "SET ${setIdx + 1}/${exercise.sets.size}",
+            fontFamily = FontFamily.Monospace,
+            fontSize = 9.sp,
+            color = SplitstakColors.TextDim,
+            maxLines = 1
         )
     }
 }
@@ -316,6 +338,7 @@ private fun NavArrow(label: String, onClick: () -> Unit) {
 private fun BodyBoxes(
     exercise: Exercise,
     setIdx: Int,
+    isCardio: Boolean,
     focused: String?,
     onToggleFocus: (String) -> Unit
 ) {
@@ -324,17 +347,17 @@ private fun BodyBoxes(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        when (exercise.mode) {
-            "bodyweight" -> {
-                ValueBox("RPS", set.r, focused == "reps") { onToggleFocus("reps") }
-            }
-            "time" -> {
-                ValueBox("SEC", set.t, focused == "hold") { onToggleFocus("hold") }
-            }
-            "cardio" -> {
+        when {
+            isCardio -> {
                 val c = exercise.cardio
                 ValueBox("MIN", c?.time ?: "", focused == "ctime") { onToggleFocus("ctime") }
                 ValueBox("MI", c?.distance ?: "", focused == "cdist") { onToggleFocus("cdist") }
+            }
+            exercise.mode == "bodyweight" -> {
+                ValueBox("RPS", set.r, focused == "reps") { onToggleFocus("reps") }
+            }
+            exercise.mode == "time" -> {
+                ValueBox("SEC", set.t, focused == "hold") { onToggleFocus("hold") }
             }
             else -> {
                 ValueBox("WT", set.w, focused == "weight") { onToggleFocus("weight") }
@@ -377,7 +400,7 @@ private fun ValueBox(
         Box(
             modifier = Modifier
                 .width(54.dp)
-                .height(34.dp)
+                .height(32.dp)
                 .background(SplitstakColors.Surface)
                 .border(1.5.dp, borderColor)
                 .clickable(onClick = onClick),
@@ -398,7 +421,7 @@ private fun ValueBox(
 private fun DoneCircle(done: Boolean, onClick: () -> Unit) {
     Button(
         onClick = onClick,
-        modifier = Modifier.size(34.dp),
+        modifier = Modifier.size(32.dp),
         colors = ButtonDefaults.buttonColors(
             backgroundColor = if (done) SplitstakColors.Accent else SplitstakColors.Surface,
             contentColor = if (done) SplitstakColors.Bg else SplitstakColors.TextDim
@@ -407,7 +430,7 @@ private fun DoneCircle(done: Boolean, onClick: () -> Unit) {
         Text(
             text = if (done) "✓" else "○",
             fontFamily = FontFamily.SansSerif,
-            fontSize = 16.sp,
+            fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
             color = if (done) SplitstakColors.Bg else SplitstakColors.TextDim
         )
@@ -422,10 +445,10 @@ private fun ProgressDots(exercises: List<Exercise>) {
             Box(
                 modifier = Modifier
                     .size(4.dp)
-                    .clip(CircleShape)
                     .background(
                         if (ex.allComplete) SplitstakColors.Accent
-                        else SplitstakColors.Border
+                        else SplitstakColors.Border,
+                        shape = CircleShape
                     )
             )
         }

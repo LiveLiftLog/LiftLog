@@ -119,7 +119,9 @@ private fun buildRoot(
                 .addContent(textLine("Tap to save", 11, SplitstakColors.TEXT_DIM))
         }
         else -> {
-            val ex = snapshot.currentExercise()
+            // Prefer the exercise the user last interacted with on the
+            // watch; fall back to the PWA's selection or the first one.
+            val ex = WatchState.currentExercise(context) ?: snapshot.currentExercise()
             if (ex == null) {
                 column.addContent(textLine("No exercise selected", 12, SplitstakColors.TEXT_DIM))
             } else {
