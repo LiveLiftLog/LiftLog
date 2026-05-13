@@ -1,7 +1,15 @@
 package com.splitstak.app.wear.ui
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,253 +21,376 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.rotary.onRotaryScrollEvent
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material.Button
 import androidx.wear.compose.material.ButtonDefaults
-import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
 import com.splitstak.app.wear.data.ActionSender
 import com.splitstak.app.wear.data.Exercise
 import com.splitstak.app.wear.data.SetEntry
 import com.splitstak.app.wear.data.Snapshot
 import com.splitstak.app.wear.data.WatchState
+import kotlin.math.abs
+import kotlinx.coroutines.delay
 
 /**
- * The main interaction surface — one exercise, one set focused, ± weight,
- * ± reps, and a done toggle. Layout adapts to the exercise's mode:
- *   - reps         (default strength): weight + reps + done
- *   - bodyweight   reps + done (weight column hidden)
- *   - time         seconds + done (single stepper)
- *   - cardio       minutes + miles + done (no set number)
+ * The main interaction surface — one exercise, one set displayed at a time.
  *
- * Each tap fires an ActionSender call — those are sent to the phone via the
- * Wearable Data Layer's MessageClient, the phone applies the mutation, the
- * phone re-publishes the snapshot, and the watch picks up the change.
+ * Layout (compact for the Pixel Watch's ~390px circular face):
+ *   - Exercise name + target (top)
+ *   - "‹ SET 2/3 ›" row (taps cycle to prev/next exercise)
+ *   - Side-by-side value boxes (WT / RPS, or mode-appropriate)
+ *       · Tap a box to focus it (orange pulsing border).
+ *       · Rotating the crown adjusts the focused value.
+ *       · Tap the focused box again to release focus.
+ *   - Done circle (tap to mark the set complete)
+ *   - Progress dots
+ *
+ * On hitting a PR, a full-face black overlay flashes "PR" for ~3s before
+ * fading. Every interaction calls [ActionSender] which:
+ *   1. Mutates WatchState locally for instant UI feedback
+ *   2. Sends the action to the phone over MessageClient
+ *   3. The phone applies the same mutation against the source of truth
+ *      and re-publishes the snapshot, reconciling any drift
  */
 @Composable
 fun ActiveExerciseScreen(snapshot: Snapshot) {
     val context = LocalContext.current
     val selectedId by WatchState.widgetSelectedFlow.collectAsState()
-    val exercise = remember(snapshot, selectedId) {
-        snapshot.exercises.firstOrNull { it.id == selectedId }
-            ?: snapshot.currentExercise()
-    } ?: return
+    val exercise = snapshot.exercises.firstOrNull { it.id == selectedId }
+        ?: snapshot.currentExercise()
+        ?: return
 
-    val setIdx = remember(exercise) {
+    val setIdx = remember(exercise.id, exercise.sets) {
         // Default to the first incomplete set; falls back to last set.
         val idx = exercise.sets.indexOfFirst { !it.d }
         if (idx >= 0) idx else (exercise.sets.size - 1).coerceAtLeast(0)
     }
 
-    Column(
+    // Which box is focused for crown input. null = none (crown is idle).
+    var focused by remember(exercise.id, setIdx) { mutableStateOf<String?>(null) }
+
+    // Compose focus + rotary handling. The outer Box always holds focus so
+    // crown events route to our handler regardless of which UI box is
+    // visually focused-for-editing.
+    val focusRequester = remember { FocusRequester() }
+    var rotaryAccum by remember { mutableStateOf(0f) }
+    LaunchedEffect(Unit) {
+        // requestFocus() can throw if the modifier isn't attached yet;
+        // a tiny delay lets the focusable node settle.
+        try {
+            delay(50)
+            focusRequester.requestFocus()
+        } catch (_: Exception) {
+        }
+    }
+
+    // PR overlay — rising edge of exercise.isPr while id stays constant.
+    var showPrOverlay by remember { mutableStateOf(false) }
+    val prevPr = remember(exercise.id) { mutableStateOf(exercise.isPr) }
+    LaunchedEffect(exercise.id, exercise.isPr) {
+        if (exercise.isPr && !prevPr.value) {
+            showPrOverlay = true
+            delay(3000)
+            showPrOverlay = false
+        }
+        prevPr.value = exercise.isPr
+    }
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 18.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+            .background(SplitstakColors.Bg)
+            .focusRequester(focusRequester)
+            .focusable()
+            .onRotaryScrollEvent { event ->
+                val f = focused ?: return@onRotaryScrollEvent false
+                rotaryAccum += event.verticalScrollPixels
+                // Roughly one detent on the Pixel Watch crown. Lower
+                // value = faster ramp; higher = more controlled.
+                val threshold = 40f
+                while (abs(rotaryAccum) >= threshold) {
+                    val sign = if (rotaryAccum > 0) 1 else -1
+                    rotaryAccum -= sign * threshold
+                    when (f) {
+                        "weight" -> ActionSender.incWeight(context, exercise.id, setIdx, sign)
+                        "reps"   -> ActionSender.incReps(context, exercise.id, setIdx, sign)
+                        "hold"   -> ActionSender.incHold(context, exercise.id, setIdx, sign)
+                        "ctime"  -> ActionSender.incTime(context, exercise.id, sign.toDouble())
+                        "cdist"  -> ActionSender.incDistance(context, exercise.id, sign.toDouble())
+                    }
+                }
+                true
+            }
     ) {
-        // Header: name + target
-        Text(
-            text = exercise.name.uppercase(),
-            style = MaterialTheme.typography.title2,
-            color = SplitstakColors.Text,
-            textAlign = TextAlign.Center,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-        if (exercise.target.isNotEmpty()) {
-            Spacer(Modifier.height(2.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 14.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Title
             Text(
-                text = exercise.target,
-                style = MaterialTheme.typography.caption1,
-                color = SplitstakColors.Accent
+                text = exercise.name.uppercase(),
+                fontFamily = FontFamily.SansSerif,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = SplitstakColors.Text,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-        }
-
-        Spacer(Modifier.height(6.dp))
-
-        // Set indicator with ◀ ▶ nav
-        if (exercise.mode != "cardio") {
-            ExerciseNavRow(
-                setLabel = "SET ${setIdx + 1} / ${exercise.sets.size}",
-                onPrev = { ActionSender.nav(context, -1) },
-                onNext = { ActionSender.nav(context, 1) }
-            )
-        } else {
-            ExerciseNavRow(
-                setLabel = "CARDIO",
-                onPrev = { ActionSender.nav(context, -1) },
-                onNext = { ActionSender.nav(context, 1) }
-            )
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        // Mode-specific stepper rows + done
-        when (exercise.mode) {
-            "bodyweight" -> {
-                val set = exercise.sets.getOrNull(setIdx) ?: SetEntry("", "", "", false)
-                Stepper(
-                    label = "RPS",
-                    value = set.r.ifEmpty { "—" },
-                    onDec = { ActionSender.incReps(context, exercise.id, setIdx, -1) },
-                    onInc = { ActionSender.incReps(context, exercise.id, setIdx, 1) }
-                )
-            }
-            "time" -> {
-                val set = exercise.sets.getOrNull(setIdx) ?: SetEntry("", "", "", false)
-                Stepper(
-                    label = "SEC",
-                    value = set.t.ifEmpty { "—" },
-                    onDec = { ActionSender.incHold(context, exercise.id, setIdx, -1) },
-                    onInc = { ActionSender.incHold(context, exercise.id, setIdx, 1) }
-                )
-            }
-            "cardio" -> {
-                val c = exercise.cardio
-                Stepper(
-                    label = "MIN",
-                    value = c?.time?.ifEmpty { "—" } ?: "—",
-                    onDec = { ActionSender.incTime(context, exercise.id, -1.0) },
-                    onInc = { ActionSender.incTime(context, exercise.id, 1.0) }
-                )
-                Spacer(Modifier.height(4.dp))
-                Stepper(
-                    label = "MI",
-                    value = c?.distance?.ifEmpty { "—" } ?: "—",
-                    onDec = { ActionSender.incDistance(context, exercise.id, -1.0) },
-                    onInc = { ActionSender.incDistance(context, exercise.id, 1.0) }
-                )
-            }
-            else -> { // "reps" — default strength
-                val set = exercise.sets.getOrNull(setIdx) ?: SetEntry("", "", "", false)
-                Stepper(
-                    label = "WT",
-                    value = set.w.ifEmpty { "—" },
-                    onDec = { ActionSender.incWeight(context, exercise.id, setIdx, -1) },
-                    onInc = { ActionSender.incWeight(context, exercise.id, setIdx, 1) }
-                )
-                Spacer(Modifier.height(4.dp))
-                Stepper(
-                    label = "RPS",
-                    value = set.r.ifEmpty { "—" },
-                    onDec = { ActionSender.incReps(context, exercise.id, setIdx, -1) },
-                    onInc = { ActionSender.incReps(context, exercise.id, setIdx, 1) }
-                )
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        // Done toggle
-        val isDone: Boolean = when (exercise.mode) {
-            "cardio" -> exercise.cardio?.done == true
-            else -> exercise.sets.getOrNull(setIdx)?.d == true
-        }
-        DoneCircle(
-            done = isDone,
-            onClick = {
-                if (exercise.mode == "cardio") {
-                    ActionSender.toggleDone(context, exercise.id, -1)
-                } else {
-                    ActionSender.toggleDone(context, exercise.id, setIdx)
+            // Target (or PR tag inline when relevant)
+            val targetLine = buildString {
+                if (exercise.target.isNotEmpty()) append(exercise.target)
+                if (exercise.isPr) {
+                    if (isNotEmpty()) append(" · ")
+                    append("PR")
                 }
             }
-        )
+            if (targetLine.isNotEmpty()) {
+                Text(
+                    text = targetLine,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 9.sp,
+                    color = SplitstakColors.Accent,
+                    maxLines = 1
+                )
+            }
 
-        Spacer(Modifier.height(6.dp))
+            // SET row with ‹ ›
+            ExerciseNavRow(
+                label = when (exercise.mode) {
+                    "cardio" -> "CARDIO"
+                    else -> "SET ${setIdx + 1}/${exercise.sets.size}"
+                },
+                onPrev = { ActionSender.nav(context, -1) },
+                onNext = { ActionSender.nav(context, 1) }
+            )
 
-        // Progress dots — filled per allComplete exercise on the day
-        ProgressDots(exercises = snapshot.exercises)
+            // Value boxes
+            BodyBoxes(
+                exercise = exercise,
+                setIdx = setIdx,
+                focused = focused,
+                onToggleFocus = { tag ->
+                    focused = if (focused == tag) null else tag
+                }
+            )
+
+            // Done circle
+            val isDone: Boolean = when (exercise.mode) {
+                "cardio" -> exercise.cardio?.done == true
+                else -> exercise.sets.getOrNull(setIdx)?.d == true
+            }
+            DoneCircle(
+                done = isDone,
+                onClick = {
+                    if (exercise.mode == "cardio") {
+                        ActionSender.toggleDone(context, exercise.id, -1)
+                    } else {
+                        ActionSender.toggleDone(context, exercise.id, setIdx)
+                    }
+                }
+            )
+
+            // Progress dots
+            ProgressDots(exercises = snapshot.exercises)
+        }
+
+        // Crown indicator — pulsing arrow on the right edge (Pixel Watch
+        // crown is right-mounted) when a box is focused.
+        if (focused != null) {
+            val pulse = rememberInfiniteTransition(label = "crown-pulse")
+            val pulseAlpha by pulse.animateFloat(
+                initialValue = 0.25f, targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(700, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "crown-pulse-alpha"
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(end = 2.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Text(
+                    text = "›",
+                    fontFamily = FontFamily.SansSerif,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = SplitstakColors.Accent,
+                    modifier = Modifier.alpha(pulseAlpha)
+                )
+            }
+        }
+
+        // PR overlay — full face black + giant "PR"
+        if (showPrOverlay) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(SplitstakColors.Bg),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "PR",
+                    fontFamily = FontFamily.SansSerif,
+                    fontSize = 76.sp,
+                    fontWeight = FontWeight.Black,
+                    color = SplitstakColors.Accent
+                )
+            }
+        }
     }
 }
 
 @Composable
 private fun ExerciseNavRow(
-    setLabel: String,
+    label: String,
     onPrev: () -> Unit,
     onNext: () -> Unit
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        SmallCircleButton(label = "‹", onClick = onPrev)
+        NavArrow(label = "‹", onClick = onPrev)
         Text(
-            text = setLabel,
-            style = MaterialTheme.typography.caption1,
+            text = label,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 9.sp,
             color = SplitstakColors.TextDim,
-            modifier = Modifier.width(80.dp),
+            modifier = Modifier.width(58.dp),
             textAlign = TextAlign.Center
         )
-        SmallCircleButton(label = "›", onClick = onNext)
+        NavArrow(label = "›", onClick = onNext)
     }
 }
 
 @Composable
-private fun Stepper(
-    label: String,
-    value: String,
-    onDec: () -> Unit,
-    onInc: () -> Unit
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+private fun NavArrow(label: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(22.dp)
+            .clip(CircleShape)
+            .background(SplitstakColors.Surface)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.caption3,
-            color = SplitstakColors.TextFaint,
-            modifier = Modifier.width(26.dp),
-            textAlign = TextAlign.End
+            fontFamily = FontFamily.SansSerif,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            color = SplitstakColors.Text
         )
-        SmallCircleButton(label = "−", onClick = onDec)
+    }
+}
+
+@Composable
+private fun BodyBoxes(
+    exercise: Exercise,
+    setIdx: Int,
+    focused: String?,
+    onToggleFocus: (String) -> Unit
+) {
+    val set = exercise.sets.getOrNull(setIdx) ?: SetEntry("", "", "", false)
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        when (exercise.mode) {
+            "bodyweight" -> {
+                ValueBox("RPS", set.r, focused == "reps") { onToggleFocus("reps") }
+            }
+            "time" -> {
+                ValueBox("SEC", set.t, focused == "hold") { onToggleFocus("hold") }
+            }
+            "cardio" -> {
+                val c = exercise.cardio
+                ValueBox("MIN", c?.time ?: "", focused == "ctime") { onToggleFocus("ctime") }
+                ValueBox("MI", c?.distance ?: "", focused == "cdist") { onToggleFocus("cdist") }
+            }
+            else -> {
+                ValueBox("WT", set.w, focused == "weight") { onToggleFocus("weight") }
+                ValueBox("RPS", set.r, focused == "reps") { onToggleFocus("reps") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ValueBox(
+    label: String,
+    value: String,
+    focused: Boolean,
+    onClick: () -> Unit
+) {
+    val pulse = rememberInfiniteTransition(label = "box-pulse-$label")
+    val pulseAlpha by pulse.animateFloat(
+        initialValue = if (focused) 0.4f else 1f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(700, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "box-pulse-$label-alpha"
+    )
+    val borderColor: Color = if (focused) {
+        SplitstakColors.Accent.copy(alpha = pulseAlpha)
+    } else {
+        SplitstakColors.Border
+    }
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = label,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 8.sp,
+            color = SplitstakColors.TextFaint
+        )
+        Spacer(Modifier.height(1.dp))
         Box(
             modifier = Modifier
-                .width(58.dp)
-                .height(28.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(SplitstakColors.Bg)
-                .border(1.dp, SplitstakColors.Border, RoundedCornerShape(2.dp)),
+                .width(54.dp)
+                .height(34.dp)
+                .background(SplitstakColors.Surface)
+                .border(1.5.dp, borderColor)
+                .clickable(onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = value,
-                style = MaterialTheme.typography.body2,
+                text = value.ifEmpty { "—" },
+                fontFamily = FontFamily.Monospace,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.SemiBold,
                 color = SplitstakColors.Text
             )
         }
-        SmallCircleButton(label = "+", onClick = onInc)
-    }
-}
-
-@Composable
-private fun SmallCircleButton(label: String, onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier.size(28.dp),
-        colors = ButtonDefaults.buttonColors(
-            backgroundColor = SplitstakColors.Surface,
-            contentColor = SplitstakColors.Text
-        )
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.body2,
-            color = SplitstakColors.Text
-        )
     }
 }
 
@@ -267,7 +398,7 @@ private fun SmallCircleButton(label: String, onClick: () -> Unit) {
 private fun DoneCircle(done: Boolean, onClick: () -> Unit) {
     Button(
         onClick = onClick,
-        modifier = Modifier.size(40.dp).clip(CircleShape),
+        modifier = Modifier.size(34.dp),
         colors = ButtonDefaults.buttonColors(
             backgroundColor = if (done) SplitstakColors.Accent else SplitstakColors.Surface,
             contentColor = if (done) SplitstakColors.Bg else SplitstakColors.TextDim
@@ -275,7 +406,9 @@ private fun DoneCircle(done: Boolean, onClick: () -> Unit) {
     ) {
         Text(
             text = if (done) "✓" else "○",
-            style = MaterialTheme.typography.title2,
+            fontFamily = FontFamily.SansSerif,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
             color = if (done) SplitstakColors.Bg else SplitstakColors.TextDim
         )
     }
@@ -284,16 +417,17 @@ private fun DoneCircle(done: Boolean, onClick: () -> Unit) {
 @Composable
 private fun ProgressDots(exercises: List<Exercise>) {
     if (exercises.isEmpty()) return
-    val text = buildString {
-        for ((i, ex) in exercises.withIndex()) {
-            if (i > 0) append(' ')
-            append(if (ex.allComplete) '●' else '○')
+    Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        for (ex in exercises) {
+            Box(
+                modifier = Modifier
+                    .size(4.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (ex.allComplete) SplitstakColors.Accent
+                        else SplitstakColors.Border
+                    )
+            )
         }
     }
-    Text(
-        text = text,
-        style = MaterialTheme.typography.caption2,
-        color = SplitstakColors.Accent
-    )
 }
-

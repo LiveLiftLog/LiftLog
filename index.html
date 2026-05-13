@@ -2428,6 +2428,9 @@
       {
         date: '2026-05-13',
         changes: [
+          'Wear OS companion: switched the watch UI to the new side-by-side WT / RPS boxes — no more ± buttons. Tap a box to focus it (orange pulsing border), spin the crown to adjust, tap again to release. Crown-arrow indicator confirms which box the crown is wired to. Layout shrunk to fit the Pixel Watch screen properly so the completion button no longer clips at the bottom.',
+          'Wear OS companion: the ◀ ▶ arrows next to "SET 1/3" now actually flip exercises on the watch — earlier the watch sent the action to the phone but the phone never told the watch to re-select.',
+          'Wear OS companion: weight / rep / done taps now respond instantly. Previously every press waited on a watch→phone→watch round trip (~300ms); the watch now mutates its own snapshot optimistically and reconciles with the phone in the background.',
           'New SPLITSTAK Pixel Watch companion app — log sets and adjust weight / reps right from your wrist using the rotating crown, with a watch tile and two watch-face complications for set progress and rest timer. The wear app is bundled inside the Android phone APK, so installing (or updating) SPLITSTAK on your phone auto-pushes the companion to any Wear OS watch paired with it. Open SPLITSTAK on the phone once after install so the watch can pick up your live workout.',
           'Fixed a bug where switching the workout for a weekday could leave both the old and new workout listed in the day picker. Existing duplicates are cleaned up automatically on next load — if any day picks the wrong workout, just re-set it from DATA + SETNG → DAY ASSIGNMENT once.',
           'Fixed a bug where dismissing the rest timer mid-beep could leave Spotify or other background music paused indefinitely. The timer now releases audio focus cleanly on dismiss so music resumes the moment you tap dismiss.',
