@@ -1,0 +1,21 @@
+{
+  "name": "splitstak-mobile",
+  "version": "0.0.1",
+  "description": "Native iOS/Android wrapper for the SPLITSTAK PWA. Capacitor packs the same index.html that Cloudflare Pages serves into a native shell so we can attach lock-screen widgets and live activities.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync-web": "node sync-web.mjs",
+    "cap:sync": "npm run sync-web && cap sync",
+    "android:open": "npm run cap:sync && cap open android",
+    "android:run": "npm run cap:sync && cap run android"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/core": "^6.1.2"
+  }
+}

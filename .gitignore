@@ -1,6 +1,11 @@
-node_modules/
-package.json
-package-lock.json
+# Anchor these to the repo root only — without the leading slash they
+# would also block legitimate package.json files in subdirectories
+# (e.g. mobile/package.json, which is the Capacitor build config). The
+# root-level ones exist only because an accidental `npm install wrangler@4`
+# earlier put a dev dep at the repo root we don't want to track.
+/node_modules/
+/package.json
+/package-lock.json
 .claude/
 
 # Capacitor / native build chain
