@@ -2429,7 +2429,8 @@
         date: '2026-05-15',
         changes: [
           'The INFO tab now ends with a small footer linking to the Privacy Policy at splitstak.com/privacy.html and a contact email. The policy was already live; it just wasn\'t reachable from inside the app.',
-          'The ANDROID APP card on the INFO tab now points at the latest GitHub release automatically instead of being pinned to the very first beta tag. New beta builds reach sideload users without needing the link updated.'
+          'The ANDROID APP card on the INFO tab now points at the latest GitHub release automatically instead of being pinned to the very first beta tag. New beta builds reach sideload users without needing the link updated.',
+          'CSV export now works inside the Android app. It previously did nothing on tap because the native WebView has no download manager wired up; Export now opens the system share sheet so you can save the CSV to Files, email it to yourself, or send it anywhere else. The Chrome PWA at splitstak.com is unchanged.'
         ]
       },
       {
@@ -4192,11 +4193,28 @@
   function openExport() {
     const csv = stateToCSV(state);
     const date = new Date().toISOString().split('T')[0];
+    const filename = 'splitstak-' + date + '.csv';
+
+    // Inside the Capacitor WebView, <a download> silently fails — Android's
+    // System WebView has no default download manager attached. Route through
+    // the platform share sheet via the Web Share API so the user can save to
+    // Files, email it, etc. Falls through to the standard browser path when
+    // running on splitstak.com in Chrome.
+    if (window.Capacitor && navigator.canShare) {
+      const file = new File([csv], filename, { type: 'text/csv;charset=utf-8;' });
+      if (navigator.canShare({ files: [file] })) {
+        navigator.share({ files: [file], title: filename })
+          .then(() => showToast('Exported'))
+          .catch(() => {}); // user cancelled the share sheet — no toast, no error
+        return;
+      }
+    }
+
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'splitstak-' + date + '.csv';
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

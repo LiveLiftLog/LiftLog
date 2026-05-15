@@ -18,8 +18,8 @@ android {
         applicationId "com.splitstak.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 12
-        versionName "1.2.0"
+        versionCode 18
+        versionName "1.2.3"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -67,9 +67,14 @@ dependencies {
 
     // Wearable Data Layer — phone end of the phone⇄watch sync.
     implementation "com.google.android.gms:play-services-wearable:${rootProject.ext.playServicesWearableVersion}"
-    // Bundle the Wear OS module inside this APK so installing the phone app
-    // automatically pushes the Wear app to a paired watch.
-    wearApp project(':wear')
+    // NOTE: the previous `wearApp project(':wear')` line was removed in
+    // 2026-05. Google deprecated phone-AAB-embedded Wear delivery in 2023
+    // (mandatory Sept 2023, the `wearApp` DSL was fully removed in AGP 9.0
+    // in Jan 2026). Wear OS apps are now published as STANDALONE AABs to
+    // their own Play Console track under the SAME package name
+    // ("com.splitstak.app"). The `:wear` module is still built — it just
+    // gets uploaded to Play directly as `wear-release.aab` instead of
+    // being embedded here.
 }
 
 apply from: 'capacitor.build.gradle'

@@ -1,6 +1,15 @@
 apply plugin: 'com.android.application'
 apply plugin: 'org.jetbrains.kotlin.android'
 
+// Read the same upload-keystore credentials the phone module uses, so the
+// Wear AAB is signed with the same upload key and Play recognises it as
+// the same publisher when uploaded to the same package's Wear OS track.
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace "com.splitstak.app.wear"
     compileSdk rootProject.ext.wearCompileSdkVersion
@@ -9,8 +18,19 @@ android {
         applicationId "com.splitstak.app"   // must match phone app for Wearable Data Layer
         minSdkVersion rootProject.ext.wearMinSdkVersion
         targetSdkVersion rootProject.ext.wearTargetSdkVersion
-        versionCode 12
-        versionName "1.2.0"
+        versionCode 19
+        versionName "1.2.3"
+    }
+
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                storeFile rootProject.file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
     }
 
     buildFeatures {
@@ -35,6 +55,9 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (keystorePropertiesFile.exists()) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 
