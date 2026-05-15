@@ -2426,6 +2426,13 @@
     // prepend a new { date, changes: [...] } object to the front of this array.
     const CHANGELOG = [
       {
+        date: '2026-05-15',
+        changes: [
+          'The INFO tab now ends with a small footer linking to the Privacy Policy at splitstak.com/privacy.html and a contact email. The policy was already live; it just wasn\'t reachable from inside the app.',
+          'The ANDROID APP card on the INFO tab now points at the latest GitHub release automatically instead of being pinned to the very first beta tag. New beta builds reach sideload users without needing the link updated.'
+        ]
+      },
+      {
         date: '2026-05-13',
         changes: [
           'New SPLITSTAK Pixel Watch / Wear OS companion app. Log sets, switch exercises, and adjust weight, reps, hold seconds, cardio time and distance right from your wrist. Tap the exercise box, the WT box, or the RPS box to focus it (orange pulsing border) — then spin the crown to adjust. A crown indicator arrow pulses in sync on whichever side your physical crown is on (lefty or righty auto-detected). Strength, bodyweight, timed-hold, and cardio modes all supported, with a PR celebration when you hit one. Includes a watch tile and two watch-face complications (set progress + rest timer) that stay in sync with whichever exercise you last touched on the watch. The wear app is bundled inside the Android phone APK, so installing or updating SPLITSTAK on your phone auto-pushes the companion to any paired Wear OS watch — open SPLITSTAK once on the phone after install so the watch can pick up your live workout.',
@@ -2537,7 +2544,7 @@
         <p>The native Android app adds a <strong>lock-screen widget</strong> — tick sets, adjust weight and reps with ± buttons, and watch the rest timer right from your lock screen. Native lock-screen notifications fire for the 10-second warning and finish even when the app is closed.</p>
         <p>Includes a <strong>Pixel Watch / Wear OS companion</strong> — log sets and adjust weight / reps from your wrist with the rotating crown, plus a watch tile and two complications for set progress and rest timer. If your phone is paired to a Wear OS watch, the companion auto-installs after you install the phone app.</p>
         <p>Each install keeps its own storage. To move your history across: <strong>DATA + SETNG → BACKUP & RESTORE → Export</strong> the CSV here, then Import it inside the Android app after installing.</p>
-        <a class="finish-day" href="https://github.com/splitstak/SPLITSTAK/releases/download/v0.1.0-android-beta/splitstak.apk" target="_blank" rel="noopener" style="display: block; text-decoration: none; text-align: center; margin-top: 14px;">DOWNLOAD ANDROID APP</a>
+        <a class="finish-day" href="https://github.com/splitstak/SPLITSTAK/releases/latest/download/splitstak.apk" target="_blank" rel="noopener" style="display: block; text-decoration: none; text-align: center; margin-top: 14px;">DOWNLOAD ANDROID APP</a>
       </div>`}
 
       <div class="info-section">
@@ -2562,6 +2569,12 @@
           ${CHANGELOG.map(e => `<option value="${e.date}">${e.date}</option>`).join('')}
         </select>
         <div id="changelogBody"></div>
+      </div>
+
+      <div style="text-align: center; padding: 24px 0 8px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-faint); letter-spacing: 0.1em;">
+        <a href="/privacy.html" target="_blank" rel="noopener" style="color: var(--text-dim); text-decoration: none; border-bottom: 1px solid var(--border); padding-bottom: 2px;">PRIVACY POLICY</a>
+        <span style="margin: 0 12px;">·</span>
+        <a href="mailto:jacob@splitstak.com" style="color: var(--text-dim); text-decoration: none; border-bottom: 1px solid var(--border); padding-bottom: 2px;">JACOB@SPLITSTAK.COM</a>
       </div>
     `;
 

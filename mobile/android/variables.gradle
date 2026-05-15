@@ -1,7 +1,7 @@
 ext {
     minSdkVersion = 22
-    compileSdkVersion = 34
-    targetSdkVersion = 34
+    compileSdkVersion = 36
+    targetSdkVersion = 36
     androidxActivityVersion = '1.8.0'
     androidxAppCompatVersion = '1.6.1'
     androidxCoordinatorLayoutVersion = '1.2.0'
@@ -16,8 +16,8 @@ ext {
 
     // Wear module ---------------------------------------------------------
     wearMinSdkVersion = 26       // Wear OS 2+; covers Pixel Watch comfortably
-    wearTargetSdkVersion = 34
-    wearCompileSdkVersion = 34
+    wearTargetSdkVersion = 36
+    wearCompileSdkVersion = 36
     composeCompilerVersion = '1.5.3'   // matches Kotlin 1.9.0
     composeBomVersion = '2023.10.01'
     wearComposeVersion = '1.2.1'
