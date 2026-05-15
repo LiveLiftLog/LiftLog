@@ -18,8 +18,8 @@ android {
         applicationId "com.splitstak.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 18
-        versionName "1.2.3"
+        versionCode 20
+        versionName "1.2.4"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -45,6 +45,16 @@ android {
                 signingConfig signingConfigs.release
             }
         }
+    }
+
+    // Required since we added @capacitor/filesystem + @capacitor/share in
+    // 2026-05 — both bring in transitive deps (com.google.gms.google-services
+    // 4.4.0 etc.) that target Java 11. Without this block the consumer falls
+    // back to the AGP default (Java 8) and the dependency resolver rejects
+    // the variant. Wear module already has the same block.
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 }
 

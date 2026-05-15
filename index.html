@@ -2430,7 +2430,7 @@
         changes: [
           'The INFO tab now ends with a small footer linking to the Privacy Policy at splitstak.com/privacy.html and a contact email. The policy was already live; it just wasn\'t reachable from inside the app.',
           'The ANDROID APP card on the INFO tab now points at the latest GitHub release automatically instead of being pinned to the very first beta tag. New beta builds reach sideload users without needing the link updated.',
-          'CSV export now works inside the Android app. It previously did nothing on tap because the native WebView has no download manager wired up. Export now copies the full CSV to your clipboard and shows a popup with paste instructions; from there you can paste into Files, email, or a notes app to save it. The Chrome PWA at splitstak.com is unchanged — that path still produces a real .csv file download.'
+          'CSV export now works inside the Android app and produces a real .csv file. Tap Export and Android\'s share sheet pops up — pick "Save to Files" to drop the file somewhere on your phone, or email it to yourself, or send it to Drive, or anywhere else. The Chrome PWA at splitstak.com keeps its existing direct .csv download behaviour. Note: requires the Android app to be on v1.2.4 or newer.'
         ]
       },
       {
@@ -4195,26 +4195,34 @@
     const date = new Date().toISOString().split('T')[0];
     const filename = 'splitstak-' + date + '.csv';
 
-    // Capacitor / Android WebView path. Two things to know:
-    //  1. <a download> silently fails — the WebView has no download manager
-    //     attached and Capacitor's BridgeActivity doesn't install a
-    //     DownloadListener by default.
-    //  2. The Web Share API (navigator.share / navigator.canShare) is a
-    //     Chrome-browser surface, NOT an Android WebView surface — even on
-    //     recent Chromium WebView builds it's typically not exposed.
-    // So we fall back to clipboard + an instructional modal. The user pastes
-    // the CSV into a Files app / email / note and saves from there. Ugly but
-    // works in any WebView without native plugin work.
+    // Capacitor (Android) path. The Android WebView has no download manager
+    // and doesn't expose the Web Share API, so a plain <a download> silently
+    // fails. We write the CSV to the app's cache directory via
+    // @capacitor/filesystem, then open Android's share sheet via
+    // @capacitor/share so the user can route the real .csv file to Files,
+    // Gmail, Drive, or anywhere else. Both plugins are installed in
+    // mobile/package.json — if they're missing the bridge is out of sync.
     if (window.Capacitor) {
-      navigator.clipboard.writeText(csv).then(() => {
-        customAlert(
-          'CSV copied to clipboard.\n\n' +
-          'Paste it into a Files app, email, or notes app to save it permanently. ' +
-          'You can re-import the same text using the Import button.'
-        );
-      }).catch((e) => {
-        customAlert('Couldn\'t copy CSV to clipboard: ' + (e && (e.message || e.name) || 'unknown'));
-      });
+      const plugins = window.Capacitor.Plugins || {};
+      if (plugins.Filesystem && plugins.Share) {
+        plugins.Filesystem.writeFile({
+          path: filename,
+          data: csv,
+          directory: 'CACHE',
+          encoding: 'utf8'
+        }).then((res) => plugins.Share.share({
+          title: 'SPLITSTAK CSV',
+          files: [res.uri],
+          dialogTitle: 'Save SPLITSTAK CSV'
+        })).then(() => showToast('Exported')).catch((e) => {
+          const msg = (e && (e.message || e.name)) || 'unknown';
+          // User dismissed the share sheet — no error UI
+          if (/cancel/i.test(msg) || /abort/i.test(msg) || /dismiss/i.test(msg)) return;
+          customAlert('Export failed: ' + msg);
+        });
+        return;
+      }
+      customAlert('Native share plugin not available. Update SPLITSTAK from the Play Store and try again.');
       return;
     }
 
